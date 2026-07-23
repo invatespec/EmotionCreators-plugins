@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>EC_VariableMod_SaveLoad</RootNamespace>
+    <AssemblyName>EC_VariableMod_SaveLoad</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- 沿用手写 Properties/AssemblyInfo.cs（含 AssemblyCompany/Version），避免与 SDK 默认生成的重复 -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+    <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+    <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+    <GenerateAssemblyDescriptionAttribute>false</GenerateAssemblyDescriptionAttribute>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <Deterministic>false</Deterministic>
+  </PropertyGroup>
+
+  <!-- BepInEx/Harmony 来自 bepinex 源；游戏程序集与 Unity 模块来自 IllusionMods 源 -->
+  <ItemGroup>
+    <PackageReference Include="IllusionLibs.BepInEx" Version="5.4.22" />
+    <PackageReference Include="IllusionLibs.EmotionCreators.Assembly-CSharp" Version="2019.6.6.4" />
+    <PackageReference Include="IllusionLibs.EmotionCreators.IL" Version="2019.6.6.4" />
+    <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.CoreModule" Version="2017.4.24.4" />
+    <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.UI" Version="2017.4.24.4" />
+    <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.IMGUIModule" Version="2017.4.24.4" />
+  </ItemGroup>
+
+  <!-- 游戏运行期不需要把依赖 dll 复制到输出，插件只发自己的 dll -->
+  <Target Name="SkipAllRefs" AfterTargets="ResolveReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

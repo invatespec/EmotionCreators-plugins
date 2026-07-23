@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net46</TargetFramework>
+        <AssemblyName>EC_Fix_AnimationClipCleanup</AssemblyName>
+        <OutputType>Library</OutputType>
+        <RootNamespace>IllusionFixes</RootNamespace>
+        <LangVersion>9.0</LangVersion>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <OutputPath>..\..\bin\BepInEx\plugins\IllusionFixes\</OutputPath>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+        <AssemblyVersion>1.3.0.0</AssemblyVersion>
+        <FileVersion>1.3.0.0</FileVersion>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="IllusionLibs.BepInEx" Version="5.4.22" />
+        <PackageReference Include="IllusionLibs.BepInEx.Harmony" Version="2.9.0" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.Assembly-CSharp" Version="2019.6.6.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.CoreModule" Version="2017.4.24.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.AnimationModule" Version="2017.4.24.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.UI" Version="2017.4.24.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.IL" Version="2019.6.6.4" />
+    </ItemGroup>
+    <Target Name="SkipAllRefs" AfterTargets="ResolveReferences">
+        <ItemGroup>
+            <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" />
+        </ItemGroup>
+    </Target>
+</Project>
