@@ -1,9 +1,10 @@
-﻿// EC_SceneExport v1.1 — BepInEx 5 plugin
+﻿// EC_SceneExport v1.2.1 — BepInEx 5 plugin
 //
 // 快捷键配置在 BepInEx\config\com.monophony.bepinex.sceneexport.cfg 中
 
 using BepInEx;
 using BepInEx.Configuration;
+using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -21,7 +22,7 @@ namespace EC_SceneExport
         public const string PluginNameInternal = "EC_SceneExport";
         public const string GUID = "com.monophony.bepinex.sceneexport";
         public const string PluginName = "Scene Export";
-        public const string Version = "1.1";
+        public const string Version = "1.2.1";
         public static string ExportPath;
 
         // partファイル識別用
@@ -29,6 +30,7 @@ namespace EC_SceneExport
         public static ConfigEntry<KeyboardShortcut> PartsExportHotkey { get; private set; }
         public static ConfigEntry<KeyboardShortcut> PartsImportHotkey { get; private set; }
         public static ConfigEntry<bool> EnableCharaRemove { get; private set; }
+        public static ConfigEntry<bool> TrimExtraCorrectionJoints { get; private set; }
         private const int PART_KIND_H = 0;
         private const int PART_KIND_ADV = 1;
         private const string FileExtension = "part";
@@ -50,6 +52,14 @@ namespace EC_SceneExport
             PartsExportHotkey = Config.Bind("Config", "Export Parts", new KeyboardShortcut(KeyCode.E, new KeyCode[] { KeyCode.LeftAlt }), "Export all currently loaded parts in the game.");
             PartsImportHotkey = Config.Bind("Config", "Import Parts", new KeyboardShortcut(KeyCode.I, new KeyCode[] { KeyCode.LeftAlt }), "Import all files in the exported folder.");
             EnableCharaRemove = Config.Bind("Config", "Enable chara remove (Experimental)", false, "If the importing ADV part over characters, delete the characters.");
+            TrimExtraCorrectionJoints = Config.Bind(
+                "Config",
+                "Trim extra correctionJoints on import",
+                false,
+                "After Animation.Load, keep only native 5 correctionJoints (drops Finger-style slots 5+). Always expands before Load so count>5 never OOB. Turn OFF when you use Finger Mod or any plugin that needs extended joints.");
+
+            // 导入时扩容 correctionJoints 防 OOB；是否裁回 5 看 TrimExtraCorrectionJoints
+            Harmony.CreateAndPatchAll(typeof(FingerCjImportSanitize), GUID);
 
             Logger.LogDebug("Awake");
 
