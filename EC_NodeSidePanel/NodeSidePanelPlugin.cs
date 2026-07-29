@@ -19,7 +19,7 @@ namespace EC_NodeSidePanel
     {
         public const string GUID = "EC_NodeSidePanel";
         public const string PluginName = "EC Node Side Panel";
-        public const string Version = "2.0.0";
+        public const string Version = "2.1.0";
 
         internal static ManualLogSource Log;
         internal static NodeSidePanelPlugin Instance;
@@ -32,16 +32,37 @@ namespace EC_NodeSidePanel
         private const float FooterPad = 4f;
         // 收起迷你窗 = 按钮 + 四周 pad
         private const float MiniSize = ToggleSize + FooterPad * 2f;
-        private const float NudgeW = 168f;
-        private const float NudgeH = 148f;
+        private const float NudgeW = 260f;
+        private const float NudgeH = 320f;
+        // 子面板上半部给连接区，下半部给位移区
+        private const float ConnectH = 172f;
         private const int WinIdMain = 0x4E535031; // NSP1
         private const int WinIdNudge = 0x4E535032;
         // IMGUI 文本控件名：用于 GetNameOfFocusedControl，驱动 isInputNow 等价
         private const string CtrlSearch = "NSP_Search";
         private const string CtrlRename = "NSP_Rename";
+        private const string CtrlConnOut = "NSP_ConnOut";
+        private const string CtrlConnIn = "NSP_ConnIn";
+        private static readonly HashSet<string> TextControlNames = new HashSet<string>
+        {
+            CtrlSearch, CtrlRename, CtrlConnOut, CtrlConnIn,
+        };
         private const float FocusHintPulseDuration = 1.6f;
         private const float FocusHintHoldDuration = 0.4f;
         private const float FocusHintThickness = 3f;
+        // 高亮重算间隔：染色幂等且极廉价，轮询顺带盖住选择变化/线重建/原版刷白
+        private const float HighlightSyncInterval = 0.2f;
+        private const float ConnectMsgDuration = 8f;
+        // CJK 字形下沿会被 18f 高的 Label 裁掉，统一用 20f
+        private const float LabelH = 20f;
+
+        // 连接待确认方向：防误触，点「连接」只置位，真正写入要再点「确认」
+        private enum PendingConnect
+        {
+            None,
+            Out,
+            In,
+        }
 
         // 列表高亮：深饱和蓝
         private static readonly Color HighlightBg = new Color(0.12f, 0.42f, 0.95f, 1f);
@@ -49,6 +70,7 @@ namespace EC_NodeSidePanel
         private static readonly Color PanelOuterBg = new Color32(0x1E, 0x23, 0x29, 0xFF);
         private static readonly Color PanelContentBg = new Color32(0x28, 0x2E, 0x36, 0xFF);
         private static readonly Color PanelFooterBg = new Color32(0x18, 0x1C, 0x21, 0xFF);
+        private static readonly Color SeparatorColor = new Color32(0x4A, 0x52, 0x5C, 0xFF);
         private static readonly Color FocusHintColor = new Color32(0xFF, 0xC1, 0x20, 0xFF);
 
         // ▣ 屏幕 Y（展开/收起一致）：窗底钉 Margin，再上抬 FooterPad
@@ -57,6 +79,7 @@ namespace EC_NodeSidePanel
         internal readonly NodeListModel ListModel = new NodeListModel();
         internal readonly FolderTreeService Folders = new FolderTreeService();
         internal readonly SceneConfigStore ConfigStore = new SceneConfigStore();
+        private readonly LineHighlightService _highlight = new LineHighlightService();
 
         private ConfigEntry<float> _sizeMultiplier;
         private Harmony _harmony;
@@ -73,6 +96,16 @@ namespace EC_NodeSidePanel
         private float _focusHintStartedAt = -1f;
         // 搜索/重命名 TextField 聚焦时为 true；Hooks 用它 OR 进 isInputNow
         private bool _textInputFocused;
+
+        // 连接区状态
+        private float _nextHighlightSyncAt;
+        private int _connectSlot;
+        private string _connectOutText = string.Empty;
+        private string _connectInText = string.Empty;
+        // 面板只放短状态；逐条明细太长会撑爆窗，改走 BepInEx 日志
+        private string _connectStatus = string.Empty;
+        private float _connectStatusAt = -1f;
+        private PendingConnect _pending;
 
         // IMGUI 屏幕坐标（Y 向下），用于吞画布输入
         private Rect _mainPanelGuiRect;
@@ -115,6 +148,7 @@ namespace EC_NodeSidePanel
         private void OnDestroy()
         {
             ConfigStore.Flush(ListModel, Folders);
+            ClearHighlight();
             _harmony?.UnpatchSelf();
             if (Instance == this)
                 Instance = null;
@@ -128,6 +162,7 @@ namespace EC_NodeSidePanel
                 ConfigStore.Flush(ListModel, Folders);
                 ClearHitRects();
                 _textInputFocused = false;
+                ClearHighlight();
             }
             _wasNodePage = onNode;
             ConfigStore.TickDebounced(ListModel, Folders);
@@ -135,6 +170,27 @@ namespace EC_NodeSidePanel
             // 列表同步放 Update，避免 OnGUI 每事件（Layout/Repaint）跑两遍
             if (onNode && _panelOpen && ListModel.ListDirty)
                 RefreshListCaches();
+
+            if (onNode && _panelOpen && _highlight.AnyMode && Time.unscaledTime >= _nextHighlightSyncAt)
+                SyncHighlight();
+        }
+
+        // 目标空（含点「清除选中」）时 Sync 内部会还原线色并关掉两个开关
+        private void SyncHighlight()
+        {
+            _nextHighlightSyncAt = Time.unscaledTime + HighlightSyncInterval;
+            NodeControl control;
+            CanvasPanController.TryGetControl(out control);
+            if (control == null)
+                return;
+            _highlight.Sync(control, NodeNudgeService.ResolveTargets(control, ListModel, Folders));
+        }
+
+        private void ClearHighlight()
+        {
+            NodeControl control;
+            CanvasPanController.TryGetControl(out control);
+            _highlight.Clear(control);
         }
 
         // 脏时：同步创建序 / 剪枝文件夹 / 重建排序缓存
@@ -194,8 +250,7 @@ namespace EC_NodeSidePanel
 
             if (_panelOpen)
             {
-                string focused = GUI.GetNameOfFocusedControl();
-                _textInputFocused = focused == CtrlSearch || focused == CtrlRename;
+                _textInputFocused = TextControlNames.Contains(GUI.GetNameOfFocusedControl());
             }
             else
             {
@@ -284,6 +339,7 @@ namespace EC_NodeSidePanel
                 {
                     // 收起：先落盘，方便用户迁目录后再展开热重载
                     ConfigStore.Flush(ListModel, Folders);
+                    ClearHighlight();
                     _panelOpen = false;
                     _nudgeOpen = false;
                 }
@@ -305,7 +361,7 @@ namespace EC_NodeSidePanel
                 _nudgeOpen = !_nudgeOpen;
             GUI.Label(
                 new Rect(PanelW - FooterPad - ToggleSize - 64f, footerY, 60f, ToggleSize),
-                "节点位移");
+                "节点操作");
 
             // 内容区避开底栏
             GUILayout.BeginArea(new Rect(4f, 4f, PanelW - 8f, contentH));
@@ -399,12 +455,16 @@ namespace EC_NodeSidePanel
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
-            // 清除选中 / 定位（独立一行；定位靠右方便连点）
+            // 清除选中 / 定位 / 连线高亮（独立一行；定位靠右方便连点）
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("清除选中", GUILayout.Width(72f)))
                 ClearSelection();
             if (GUILayout.Button("定位", GUILayout.Width(48f)))
                 FocusHighlight();
+            if (GUILayout.Toggle(_highlight.InMode, "入线", GUI.skin.button, GUILayout.Width(44f)) != _highlight.InMode)
+                ToggleLineHighlight(input: true);
+            if (GUILayout.Toggle(_highlight.OutMode, "出线", GUI.skin.button, GUILayout.Width(44f)) != _highlight.OutMode)
+                ToggleLineHighlight(input: false);
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
@@ -499,18 +559,89 @@ namespace EC_NodeSidePanel
         private void DrawNudgeWindow(int id)
         {
             DrawSolid(new Rect(0f, 0f, NudgeW, NudgeH), PanelOuterBg);
-            GUI.Label(new Rect(8f, 2f, NudgeW - 16f, 18f), "位移");
 
             NodeControl control;
             if (!CanvasPanController.TryGetControl(out control))
             {
-                GUI.Label(new Rect(8f, 20f, NudgeW - 16f, 20f), "N/A");
+                GUI.Label(new Rect(8f, 4f, NudgeW - 16f, LabelH), "N/A");
                 return;
             }
 
             var targets = NodeNudgeService.ResolveTargets(control, ListModel, Folders);
+            DrawConnectSection(control, targets);
+            DrawSolid(new Rect(6f, ConnectH - 3f, NudgeW - 12f, 1f), SeparatorColor);
+            DrawNudgeSection(targets);
+        }
+
+        // 连接区：仅在解析出的目标恰好 1 个时可用，否则整体禁用
+        private void DrawConnectSection(NodeControl control, List<NodeUI> targets)
+        {
+            const float pad = 8f;
+            const float btnW = 44f;
+            float w = NudgeW - pad * 2f;
+            float fieldW = w - 34f - btnW - 2f;
+            GUI.Label(new Rect(pad, 4f, w, LabelH), "节点连接");
+
+            NodeUI sel = targets.Count == 1 ? targets[0] : null;
+            if (sel == null)
+                _pending = PendingConnect.None;
+            int slotCount = NodeSlotInfo.OutputCount(sel);
+            _connectSlot = slotCount > 0 ? Mathf.Clamp(_connectSlot, 0, slotCount - 1) : 0;
+
+            GUI.enabled = sel != null;
+
+            if (GUI.Button(new Rect(pad, 26f, 22f, 22f), "◀"))
+                StepSlot(-1, slotCount);
+            GUI.Label(new Rect(pad + 24f, 27f, 44f, LabelH), $"输出 {_connectSlot}");
+            if (GUI.Button(new Rect(pad + 68f, 26f, 22f, 22f), "▶"))
+                StepSlot(1, slotCount);
+            GUI.Label(new Rect(pad + 94f, 27f, w - 94f, LabelH), DescribeSlot(control, sel));
+
+            GUI.Label(new Rect(pad, 53f, 32f, LabelH), "目标");
+            GUI.SetNextControlName(CtrlConnOut);
+            _connectOutText = GUI.TextField(new Rect(pad + 34f, 52f, fieldW, 22f), _connectOutText ?? string.Empty);
+            if (GUI.Button(new Rect(NudgeW - pad - btnW, 52f, btnW, 22f), "连接"))
+                _pending = PendingConnect.Out;
+
+            GUI.Label(new Rect(pad, 79f, 32f, LabelH), "来源");
+            GUI.SetNextControlName(CtrlConnIn);
+            _connectInText = GUI.TextField(new Rect(pad + 34f, 78f, fieldW, 22f), _connectInText ?? string.Empty);
+            if (GUI.Button(new Rect(NudgeW - pad - btnW, 78f, btnW, 22f), "连接"))
+                _pending = PendingConnect.In;
+
+            GUI.enabled = true;
+
+            GUI.Label(new Rect(pad, 102f, w, LabelH), "多个用 , 分隔  A:2 指定槽");
+            DrawConnectConfirm(control, sel, pad);
+            GUI.Label(new Rect(pad, 148f, w, LabelH),
+                sel == null ? "仅选中单个节点时可用" : CurrentConnectStatus());
+        }
+
+        // 确认行：只在待确认时占位，避免空态露两个死按钮
+        private void DrawConnectConfirm(NodeControl control, NodeUI sel, float pad)
+        {
+            if (_pending == PendingConnect.None || sel == null)
+                return;
+
+            GUI.Label(new Rect(pad, 125f, 88f, LabelH),
+                _pending == PendingConnect.Out ? "确认连目标?" : "确认连来源?");
+            if (GUI.Button(new Rect(pad + 90f, 124f, 50f, 22f), "确认"))
+            {
+                if (_pending == PendingConnect.Out)
+                    DoConnectOut(control, sel);
+                else
+                    DoConnectIn(control, sel);
+                _pending = PendingConnect.None;
+            }
+            if (GUI.Button(new Rect(pad + 144f, 124f, 50f, 22f), "取消"))
+                _pending = PendingConnect.None;
+        }
+
+        private void DrawNudgeSection(List<NodeUI> targets)
+        {
+            GUI.Label(new Rect(8f, ConnectH + 2f, NudgeW - 16f, LabelH), "节点位移");
             // 标题栏下多留一点，避免「目标」被截断
-            GUI.Label(new Rect(8f, 20f, NudgeW - 16f, 20f),
+            GUI.Label(new Rect(8f, ConnectH + 22f, NudgeW - 16f, LabelH),
                 targets.Count > 0 ? $"目标:{targets.Count}" : "未选目标");
 
             // 固定坐标十字，保证 ↑ 与 ↓ 同列、←↓→ 同行且不被裁切
@@ -518,7 +649,7 @@ namespace EC_NodeSidePanel
             const float btnH = 28f;
             const float gap = 4f;
             float col = (NudgeW - (btnW * 3f + gap * 2f)) * 0.5f;
-            float row0 = 44f;
+            float row0 = ConnectH + 46f;
             float row1 = row0 + btnH + gap;
             float midX = col + btnW + gap;
 
@@ -533,8 +664,70 @@ namespace EC_NodeSidePanel
                 NodeNudgeService.Nudge(targets, Vector2.right);
             GUI.enabled = true;
 
-            float tipY = row1 + btnH + 4f;
-            GUI.Label(new Rect(6f, tipY, NudgeW - 12f, 18f), "Ctrl 细调整 / Shift 粗调整");
+            GUI.Label(new Rect(6f, row1 + btnH + 4f, NudgeW - 12f, LabelH), "Ctrl 细调整 / Shift 粗调整");
+        }
+
+        private void StepSlot(int dir, int slotCount)
+        {
+            if (slotCount <= 0)
+                return;
+            _connectSlot = Mathf.Clamp(_connectSlot + dir, 0, slotCount - 1);
+        }
+
+        private string DescribeSlot(NodeControl control, NodeUI sel)
+        {
+            if (sel == null)
+                return string.Empty;
+            if (!NodeSlotInfo.IsOutputEnabled(sel, _connectSlot))
+                return "未启用";
+            string child = NodeSlotInfo.ChildUidAt(sel, _connectSlot);
+            return child == null ? "空" : "现:" + NodeSlotInfo.DisplayName(control, child);
+        }
+
+        private void DoConnectOut(NodeControl control, NodeUI sel)
+        {
+            if (sel == null)
+                return;
+            LinkResult r = NodeLinkService.ConnectOut(control, sel, _connectSlot, _connectOutText);
+            SetConnectResult(r.Ok ? "已连接" : "未连接", r.Message, r.Ok);
+        }
+
+        private void DoConnectIn(NodeControl control, NodeUI sel)
+        {
+            if (sel == null)
+                return;
+            var results = NodeLinkService.ConnectIn(control, sel, _connectInText);
+            var parts = new List<string>(results.Count);
+            int okCount = 0;
+            for (int i = 0; i < results.Count; i++)
+            {
+                // 符号后补空格：控制台里 ✘ 会和后面的字黏成一坨
+                parts.Add((results[i].Ok ? "✔ " : "✘ ") + results[i].Message);
+                if (results[i].Ok)
+                    okCount++;
+            }
+            bool all = okCount == results.Count;
+            string status = okCount == 0 ? "未连接" : all ? "已连接" : "未完全连接";
+            SetConnectResult(status, string.Join("  ", parts.ToArray()), all);
+        }
+
+        // 面板只留短状态，明细进日志
+        private void SetConnectResult(string status, string detail, bool ok)
+        {
+            _connectStatus = status ?? string.Empty;
+            _connectStatusAt = Time.unscaledTime;
+            if (ok)
+                Log.LogInfo($"connect: {detail}");
+            else
+                Log.LogWarning($"connect: {detail}");
+        }
+
+        // 过期后清空：旧提示留在面板上会误导下一次操作
+        private string CurrentConnectStatus()
+        {
+            if (_connectStatusAt < 0f || Time.unscaledTime - _connectStatusAt > ConnectMsgDuration)
+                return string.Empty;
+            return _connectStatus;
         }
 
         private static void DrawSolid(Rect rect, Color color)
@@ -617,7 +810,8 @@ namespace EC_NodeSidePanel
                 GUI.backgroundColor = HighlightBg;
                 GUI.contentColor = HighlightText;
             }
-            if (GUILayout.Button("📁 " + folder.Name, GUILayout.ExpandWidth(true)))
+            // 与节点行的 [S]/[E]/[H]/[A] 同款；emoji 字形 IMGUI 内置字体没有，显示成方块
+            if (GUILayout.Button("[D] " + folder.Name, GUILayout.ExpandWidth(true)))
             {
                 ListModel.HighlightFolderId = folderId;
                 ListModel.HighlightUid = null;
@@ -763,6 +957,21 @@ namespace EC_NodeSidePanel
             ListModel.CheckedUids.Clear();
             ListModel.HighlightUid = null;
             ListModel.HighlightFolderId = null;
+            ClearHighlight();
+        }
+
+        // 按一次开、再按一次关；两个方向独立。切换后立即生效，不等下一个 0.2s tick。
+        private void ToggleLineHighlight(bool input)
+        {
+            if (input)
+                _highlight.InMode = !_highlight.InMode;
+            else
+                _highlight.OutMode = !_highlight.OutMode;
+
+            if (_highlight.AnyMode)
+                SyncHighlight();
+            else
+                ClearHighlight();
         }
 
         // 场景 Save 前：ActiveKey 跟随当前标题，内存 Flush 到对应路径（不读盘、不迁旧目录）
@@ -776,6 +985,7 @@ namespace EC_NodeSidePanel
         internal void ReloadConfigFromDisk()
         {
             string key = ConfigStore.ResolveKey(GetSceneTitle());
+            ClearHighlight();
             ListModel.CreationOrder.Clear();
             ListModel.SyncCreationStructuresFromOrder();
             ListModel.CheckedUids.Clear();
