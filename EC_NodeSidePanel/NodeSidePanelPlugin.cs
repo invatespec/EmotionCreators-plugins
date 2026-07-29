@@ -106,6 +106,8 @@ namespace EC_NodeSidePanel
         private string _connectStatus = string.Empty;
         private float _connectStatusAt = -1f;
         private PendingConnect _pending;
+        // 待确认所针对的节点 uid：选中一变就作废，避免「确认」落到另一个节点上
+        private string _pendingUid;
 
         // IMGUI 屏幕坐标（Y 向下），用于吞画布输入
         private Rect _mainPanelGuiRect;
@@ -131,7 +133,7 @@ namespace EC_NodeSidePanel
             _sizeMultiplier = Config.Bind(
                 "Canvas",
                 "SizeMultiplier",
-                5f,
+                1f,
                 new ConfigDescription(
                     "节点画布 rtfGrid 尺寸乘数（相对原版 sizeDelta）",
                     new AcceptableValueRange<float>(1f, 10f)));
@@ -583,8 +585,10 @@ namespace EC_NodeSidePanel
             GUI.Label(new Rect(pad, 4f, w, LabelH), "节点连接");
 
             NodeUI sel = targets.Count == 1 ? targets[0] : null;
-            if (sel == null)
-                _pending = PendingConnect.None;
+            string selUid = sel?.nodeBase?.uid;
+            // 选中变化（含变多选/清空）即丢弃待确认：确认写的是当前 sel，不作废会写错节点
+            if (selUid == null || selUid != _pendingUid)
+                ClearPending();
             int slotCount = NodeSlotInfo.OutputCount(sel);
             _connectSlot = slotCount > 0 ? Mathf.Clamp(_connectSlot, 0, slotCount - 1) : 0;
 
@@ -601,13 +605,19 @@ namespace EC_NodeSidePanel
             GUI.SetNextControlName(CtrlConnOut);
             _connectOutText = GUI.TextField(new Rect(pad + 34f, 52f, fieldW, 22f), _connectOutText ?? string.Empty);
             if (GUI.Button(new Rect(NudgeW - pad - btnW, 52f, btnW, 22f), "连接"))
+            {
                 _pending = PendingConnect.Out;
+                _pendingUid = selUid;
+            }
 
             GUI.Label(new Rect(pad, 79f, 32f, LabelH), "来源");
             GUI.SetNextControlName(CtrlConnIn);
             _connectInText = GUI.TextField(new Rect(pad + 34f, 78f, fieldW, 22f), _connectInText ?? string.Empty);
             if (GUI.Button(new Rect(NudgeW - pad - btnW, 78f, btnW, 22f), "连接"))
+            {
                 _pending = PendingConnect.In;
+                _pendingUid = selUid;
+            }
 
             GUI.enabled = true;
 
@@ -631,10 +641,16 @@ namespace EC_NodeSidePanel
                     DoConnectOut(control, sel);
                 else
                     DoConnectIn(control, sel);
-                _pending = PendingConnect.None;
+                ClearPending();
             }
             if (GUI.Button(new Rect(pad + 144f, 124f, 50f, 22f), "取消"))
-                _pending = PendingConnect.None;
+                ClearPending();
+        }
+
+        private void ClearPending()
+        {
+            _pending = PendingConnect.None;
+            _pendingUid = null;
         }
 
         private void DrawNudgeSection(List<NodeUI> targets)

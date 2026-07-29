@@ -18,10 +18,10 @@ Focused on HEdit authoring QoL, ADV playback tooling, lighting, and memory fixes
 | Plugin | Version | Description |
 |--------|---------|-------------|
 | **[EC_HEditPosePanel](EC_HEditPosePanel/)** | 2.0.0 | Companion panel for Pose Adjust: keyboard/mouse axis control with Local/World translation modes, hand & skirt FK pose library (save / apply / folders / thumbnails), and guide open-close adjustment sliders. |
-| **[EC_NodeSidePanel](EC_NodeSidePanel/)** | 2.0.0 | Node-chart side panel: search, sort, per-scene folders, canvas pan scrollbars, node nudge, and expanded node canvas (default 5×). Replaces `EC_NodeCanvasExpand`. |
+| **[EC_NodeSidePanel](EC_NodeSidePanel/)** | 2.1.0 | Node-chart side panel: search, sort, per-scene folders, canvas pan scrollbars, node nudge, and expanded node canvas (default 1×). Replaces `EC_NodeCanvasExpand`. |
 | **[EC_BatchTextReplace](EC_BatchTextReplace/)** | 1.1.1 | Batch find/replace across ADV text in the current HEdit scene (hotkey window, default `F5`). |
 | **[EC_NodePlayabilityDiag](EC_NodePlayabilityDiag/)** | 1.0.0 | When Play Check fails, logs *which* parts/nodes are unplayable instead of only showing the generic “not playable” UI. |
-| **[EC_SceneExport](EC_SceneExport/)** | 1.1 | Export / import HEdit parts as `.part` files (and scene link data). Based on monophony’s Scene Export; hotkeys configurable (default Alt+E / Alt+I). |
+| **[EC_SceneExport](EC_SceneExport/)** | 1.2.1 | Export / import HEdit parts as `.part` files (and scene link data). Based on monophony’s Scene Export; hotkeys configurable (default Alt+E / Alt+I). |
 | **[EC_ADVCameraViewport](EC_ADVCameraViewport/)** | 2.0.0 | Shrinks the ADV camera viewport so UI doesn’t cover the scene; syncs ADV canvas, auto-repositions Chara State panel, and shrinks the list panel. Toggle with `F8`. |
 
 ### Playback / Story

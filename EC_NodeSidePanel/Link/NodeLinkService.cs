@@ -45,8 +45,8 @@ namespace EC_NodeSidePanel
             Apply(src, slotIdx, dstUid);
 
             if (old != null && old != dstUid)
-                return LinkResult.Done($"输出{slotIdx} → {dst.nodeBase.name}（已替换 {NodeSlotInfo.DisplayName(control, old)}）");
-            return LinkResult.Done($"输出{slotIdx} → {dst.nodeBase.name}");
+                return LinkResult.Done($"{src.nodeBase.name}.输出{slotIdx} → {dst.nodeBase.name}（已替换 {NodeSlotInfo.DisplayName(control, old)}）");
+            return LinkResult.Done($"{src.nodeBase.name}.输出{slotIdx} → {dst.nodeBase.name}");
         }
 
         // 入方向：多个「名称」或「名称:槽号」 → dst 的输入。逐条独立，单条失败不影响其余。
@@ -120,8 +120,8 @@ namespace EC_NodeSidePanel
             Apply(src, slot, dstUid);
 
             if (old != null && old != dstUid)
-                return LinkResult.Done($"{src.nodeBase.name}.输出{slot} → 本节点（已替换 {NodeSlotInfo.DisplayName(control, old)}）");
-            return LinkResult.Done($"{src.nodeBase.name}.输出{slot} → 本节点");
+                return LinkResult.Done($"{src.nodeBase.name}.输出{slot} → {dst.nodeBase.name}（已替换 {NodeSlotInfo.DisplayName(control, old)}）");
+            return LinkResult.Done($"{src.nodeBase.name}.输出{slot} → {dst.nodeBase.name}");
         }
 
         // 写入前的完整门槛：越界会数组越界，无输入槽会建出终点为 null 的废线。
