@@ -32,7 +32,7 @@ namespace EC_NodeSidePanel
         private const float FooterPad = 4f;
         // 收起迷你窗 = 按钮 + 四周 pad
         private const float MiniSize = ToggleSize + FooterPad * 2f;
-        private const float NudgeW = 260f;
+        private const float NudgeW = 208f;
         private const float NudgeH = 320f;
         // 子面板上半部给连接区，下半部给位移区
         private const float ConnectH = 172f;
@@ -82,6 +82,7 @@ namespace EC_NodeSidePanel
         private readonly LineHighlightService _highlight = new LineHighlightService();
 
         private ConfigEntry<float> _sizeMultiplier;
+        private ConfigEntry<KeyboardShortcut> _copyNameKey;
         private Harmony _harmony;
 
         private bool _panelOpen;
@@ -108,6 +109,9 @@ namespace EC_NodeSidePanel
         private PendingConnect _pending;
         // 待确认所针对的节点 uid：选中一变就作废，避免「确认」落到另一个节点上
         private string _pendingUid;
+        // 复制反馈独立于连线状态，避免两者共用一个槽互相覆盖
+        private string _copyStatus = string.Empty;
+        private float _copyStatusAt = -1f;
 
         // IMGUI 屏幕坐标（Y 向下），用于吞画布输入
         private Rect _mainPanelGuiRect;
@@ -140,6 +144,13 @@ namespace EC_NodeSidePanel
             CanvasExpandService.SizeMultiplier = _sizeMultiplier.Value;
             _sizeMultiplier.SettingChanged += (_, __) =>
                 CanvasExpandService.SizeMultiplier = _sizeMultiplier.Value;
+
+            // 复制选中节点名快捷键：光标在面板内时按，写系统剪贴板，多个用 , 分隔
+            _copyNameKey = Config.Bind(
+                "Hotkeys",
+                "CopyNodeNames",
+                new KeyboardShortcut(KeyCode.C, KeyCode.LeftControl),
+                "光标在节点面板内时复制选中节点名称（勾选>文件夹>高亮），多个用 , 分隔");
 
             Hooks.Plugin = this;
             _harmony = new Harmony(GUID);
@@ -175,6 +186,53 @@ namespace EC_NodeSidePanel
 
             if (onNode && _panelOpen && _highlight.AnyMode && Time.unscaledTime >= _nextHighlightSyncAt)
                 SyncHighlight();
+
+            TryCopySelectedNames();
+        }
+
+        // 光标在面板内且快捷键按下 → 把选中节点名（与位移同一套 ResolveTargets）写进系统剪贴板。
+        // 文本框聚焦时放行：不抢用户自己的 Ctrl+C 文本复制。
+        private void TryCopySelectedNames()
+        {
+            if (!IsNodeEditPage() || !_panelOpen || _textInputFocused)
+                return;
+            if (!IsMouseOverPanel() || !_copyNameKey.Value.IsDown())
+                return;
+
+            NodeControl control;
+            if (!CanvasPanController.TryGetControl(out control) || control == null)
+                return;
+            var targets = NodeNudgeService.ResolveTargets(control, ListModel, Folders);
+            if (targets.Count == 0)
+            {
+                _copyStatus = "未复制：未选中节点";
+                _copyStatusAt = Time.unscaledTime;
+                return;
+            }
+
+            var names = new List<string>(targets.Count);
+            foreach (var node in targets)
+            {
+                if (node?.nodeBase == null)
+                    continue;
+                names.Add(node.nodeBase.name ?? node.nodeBase.uid);
+            }
+            if (names.Count == 0)
+                return;
+
+            string joined = string.Join(",", names.ToArray());
+            GUIUtility.systemCopyBuffer = joined;
+            _copyStatus = $"已复制 {names.Count} 个";
+            _copyStatusAt = Time.unscaledTime;
+            Log.LogInfo($"copy: {joined}");
+        }
+
+        // 复制状态 8 秒后消失（与连线状态同一节奏）
+        private string CurrentCopyStatus()
+        {
+            if (_copyStatusAt < 0f || Time.unscaledTime - _copyStatusAt > ConnectMsgDuration)
+                return string.Empty;
+            return _copyStatus;
         }
 
         // 目标空（含点「清除选中」）时 Sync 内部会还原线色并关掉两个开关
@@ -623,8 +681,16 @@ namespace EC_NodeSidePanel
 
             GUI.Label(new Rect(pad, 102f, w, LabelH), "多个用 , 分隔  A:2 指定槽");
             DrawConnectConfirm(control, sel, pad);
-            GUI.Label(new Rect(pad, 148f, w, LabelH),
-                sel == null ? "仅选中单个节点时可用" : CurrentConnectStatus());
+            GUI.Label(new Rect(pad, 148f, w, LabelH), BottomStatusLine(sel));
+        }
+
+        // 连接区底行：单选时显示连线状态；多选/选夹/清空（连接不可用）时复用为复制提示与复制反馈
+        private string BottomStatusLine(NodeUI sel)
+        {
+            if (sel != null)
+                return CurrentConnectStatus();
+            string copy = CurrentCopyStatus();
+            return string.IsNullOrEmpty(copy) ? "面板内 Ctrl+C 复制节点名" : copy;
         }
 
         // 确认行：只在待确认时占位，避免空态露两个死按钮
