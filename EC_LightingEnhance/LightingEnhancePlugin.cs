@@ -37,6 +37,9 @@ namespace EC_LightingEnhance
         // === Character self shadow config ===
         internal static ConfigEntry<bool> SyncCameraDirectionalLightEulerAngles;
 
+        // === 全局自阴影开关失同步修复（游戏原生 bug） ===
+        internal static ConfigEntry<bool> SyncGlobalSelfShadow;
+
         // === Render mode fallback config ===
         internal static ConfigEntry<bool> CharaLightPriorityEnabled;
         internal static ConfigEntry<string> CharaLightRenderMode;
@@ -98,6 +101,17 @@ namespace EC_LightingEnhance
                 "Character Self Shadow", "SyncCameraDirectionalLightEulerAngles", true,
                 "Sync Camera/Main Camera/Directional Light world eulerAngles to HEditGlobal.lightChara. Rotation only; color, intensity and shadow settings are not changed.");
 
+            // 修复游戏原生 bug：全局 Config 的セルフシャドウ开关只写 QualitySettings 奇偶位，
+            // 切 cut/part 时被逐 cut 存档值（默认开）覆盖回"有阴影"，全局开关形同虚设。
+            // 开启后：全局开关为关时，每次覆盖发生都会把质量等级拉回奇数档（无阴影）。
+            // 全局开关为开时不干预。只修 QualitySettings 路，不碰 Light.shadows。
+            SyncGlobalSelfShadow = Config.Bind(
+                "Global Self Shadow", "00_SyncGlobalSelfShadow", true,
+                "Fix the game's native bug where the global Config self-shadow toggle is ignored " +
+                "after switching cuts/parts. When the global toggle is OFF, this forces the " +
+                "shadow-off quality level back after every overwrite. Only affects the " +
+                "QualitySettings path (not Light.shadows).");
+
             CharaLightPriorityEnabled = Config.Bind(
                 "Light Priority", "00_Enabled", true,
                 new ConfigDescription(
@@ -140,6 +154,7 @@ namespace EC_LightingEnhance
             harmony.PatchAll(typeof(Hooks.ADVLightUIHooks));
             harmony.PatchAll(typeof(Hooks.HEditLightUIHooks));
             harmony.PatchAll(typeof(Hooks.HPlayLightUIHooks));
+            harmony.PatchAll(typeof(Hooks.SelfShadowSyncHooks));
 
             Camera.onPreCull -= OnCameraPreCull;
             Camera.onPreCull += OnCameraPreCull;
