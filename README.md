@@ -37,6 +37,12 @@ Focused on HEdit authoring QoL, ADV playback tooling, lighting, and memory fixes
 |--------|---------|-------------|
 | **[EC_LightingEnhance](EC_LightingEnhance/)** | 1.2.0 | Higher-quality ground shadows that show outfit silhouette (via map-layer shadow proxies; approach informed by [StarPlugins](https://github.com/starstormhun/StarPlugins)), optional character self-shadow direction lock, and sunlight intensity sync for mod maps. |
 
+### Character / Face
+
+| Plugin | Version | Description |
+|--------|---------|-------------|
+| **[EC_FaceSDFShadow](EC_FaceSDFShadow/)** | 1.0.0 | Anime-style hard-edge face shadows (Uma Musume / Genshin look) that sweep with the light. Hand-drawable SDF threshold frames (template included), per-character color & shape via MaterialEditor, a screen-picking shadow color mixer, and a neck-band blend that keeps the jaw/neck seam in sync. See [USAGE.md](EC_FaceSDFShadow/USAGE.md). |
+
 ### Memory / Performance Fixes
 
 | Plugin | Version | Description |

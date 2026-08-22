@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net46</TargetFramework>
+        <AssemblyName>EC_FaceSDFShadow</AssemblyName>
+        <OutputType>Library</OutputType>
+        <RootNamespace>EC_FaceSDFShadow</RootNamespace>
+        <LangVersion>9.0</LangVersion>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <OutputPath>../../bin/BepInEx/plugins/EC_FaceSDFShadow/</OutputPath>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
+        <!-- UnityProject 是给 Unity 编辑器用的，不参与 dotnet 编译 -->
+        <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    </PropertyGroup>
+    <ItemGroup>
+        <Compile Include="*.cs" />
+        <Compile Include="Properties/*.cs" />
+    </ItemGroup>
+    <ItemGroup>
+        <!-- shader bundle 打进 DLL；缺失时构建仍通过，运行时报错提示去构建 -->
+        <EmbeddedResource Include="Resources/ec_facesdf.unity3d" Condition="Exists('Resources/ec_facesdf.unity3d')" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="IllusionLibs.BepInEx" Version="5.4.22" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.Assembly-CSharp" Version="2019.6.6.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.CoreModule" Version="2017.4.24.4" />
+        <!-- ShadowColorMixer 的 IMGUI 控件（GUI/GUILayout/Event）在 Unity 2017 属于独立模块 -->
+        <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.IMGUIModule" Version="2017.4.24.4" />
+        <!-- Texture2D.LoadImage / EncodeToPNG 在 Unity 2017 属于独立模块 -->
+        <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.ImageConversionModule" Version="2017.4.24.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.IL" Version="2019.6.6.4" />
+    </ItemGroup>
+    <ItemGroup>
+        <!-- 角色卡扩展数据依赖：ESF + ECAPI -->
+        <Reference Include="EC_ExtensibleSaveFormat">
+            <HintPath>G:\DL\z_Games\emotioncreators\BepInEx\plugins\EC_BepisPlugins\EC_ExtensibleSaveFormat.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="ECAPI">
+            <HintPath>G:\DL\z_Games\emotioncreators\BepInEx\plugins\EC_Plugins\ECAPI.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+    </ItemGroup>
+    <Target Name="SkipAllRefs" AfterTargets="ResolveReferences">
+        <ItemGroup>
+            <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" />
+        </ItemGroup>
+    </Target>
+</Project>
