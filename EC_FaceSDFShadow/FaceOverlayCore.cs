@@ -241,8 +241,11 @@ namespace EC_FaceSDFShadow
             Vector3 boxCenter = head + Vector3.up * LightBoxCenterUp;
             // 摆位:相机在光源侧看向头(shadow map 标准摆法)。反过来(头后看向光)
             // 会让刘海深度比脸远,深度门永拒。
+            // up 参照:光接近 ±Y 时默认 up(0,1,0) 与视线近平行,LookRotation 退化,
+            // 切 Z 轴参照。roll 对影零影响(正交深度与 roll 无关,渲染/采样同矩阵)。
+            Vector3 upRef = Mathf.Abs(l.y) > 0.9f ? Vector3.forward : Vector3.up;
             var trs = Matrix4x4.TRS(boxCenter + l * LightBoxCamDist,
-                                    Quaternion.LookRotation(-l), Vector3.one);
+                                    Quaternion.LookRotation(-l, upRef), Vector3.one);
             // Unity 相机看 -z,手算 view 必须补 z 翻转
             Matrix4x4 view = Matrix4x4.Scale(new Vector3(1f, 1f, -1f)) * trs.inverse;
             Matrix4x4 ortho = Matrix4x4.Ortho(-e, e, -e, e, 0.01f, LightBoxCamDist * 2f);
@@ -290,13 +293,14 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 投影用光向的仰角钳位 [10°,50°]:近水平时正交盒沿光向压扁(深度精度塌),
-        /// 近竖直时方位角抖动被放大。只钳这一路,视觉光与形态 A 不受影响。
+        /// 投影用光向的仰角钳位 ±80°:完全竖直时 up 参照退化(由调用处兜底)、
+        /// 完全水平时头深度跨度最薄。钳外极端仰角下 SDF 主域的 pitch 渐暗门
+        /// 已接管,发影无感。只钳投影用光向,不动视觉光。
         /// </summary>
         private static Vector3 ClampLightElevation(Vector3 l)
         {
             float elev = Mathf.Asin(Mathf.Clamp(l.y, -1f, 1f)) * Mathf.Rad2Deg;
-            float target = Mathf.Clamp(elev, 10f, 50f);
+            float target = Mathf.Clamp(elev, -80f, 80f);
             if (Mathf.Abs(target - elev) < 0.01f) return l;
 
             var h = new Vector2(l.x, l.z);
