@@ -138,7 +138,7 @@ namespace EC_FaceSDFShadow
         {
             new DisplayPresetEntry { Name = "light smooth",    SoftnessAngle = 5f,  NeckEdgeSoftness = 0.088f,  NeckRampScale = 0.78f,  HairShadowSoft = 0.3f },
             new DisplayPresetEntry { Name = "light hard",      SoftnessAngle = 0f,  NeckEdgeSoftness = 0.008f,  NeckRampScale = 0.819f, HairShadowSoft = 0.0f },
-            new DisplayPresetEntry { Name = "depth smooth",    SoftnessAngle = 0f,  NeckEdgeSoftness = 0.1866f, NeckRampScale = 0.7f,   HairShadowSoft = 0.8f },
+            new DisplayPresetEntry { Name = "depth smooth",    SoftnessAngle = 10f,  NeckEdgeSoftness = 0.1866f, NeckRampScale = 0.7f,   HairShadowSoft = 0.8f },
             new DisplayPresetEntry { Name = "depth hard",      SoftnessAngle = 0f,  NeckEdgeSoftness = 0.001f,  NeckRampScale = 0.664f, HairShadowSoft = 0.0f },
             new DisplayPresetEntry { Name = "absolute smooth", SoftnessAngle = 30f, NeckEdgeSoftness = 0.137f,  NeckRampScale = 0.65f,  HairShadowSoft = 1f  },
         };
