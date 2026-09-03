@@ -13,13 +13,12 @@ namespace EC_FaceSDFShadow
     /// 桶内必 push：Enable(Float, Range 0~1) + ShadowColor(Color) +
     /// ThresholdBias/SoftnessAngle(Float 滑条)。
     /// - Enable：ME 写回 SetFloat("_Enable")，shader 内 _Enable<0.5 输出白=软关闭。
-    ///   Float 带 Range 渲染成滑条（群主决策 F2，弃 Keyword toggle——反射注入 Keyword
-    ///   的 ctor 跨程序集绑定太脆）。
+    ///   Float 带 Range 渲染成滑条（Keyword toggle 的反射注入 ctor 跨程序集绑定太脆，不用）。
     /// - ShadowColor：进专属桶后 UI.cs:677 只取这一个桶不再回退 default，
     ///   必须一起登记否则原靠 default 桶列出的调色能力丢失。
     /// - 两个形态参数：逐角色定制阴影分界/边缘，Range 与 Config AcceptableValueRange 一致。
     ///
-    /// 核心时序坑（round 1/3 实测崩过）：必须先备好所有反射对象，再写桶，再刷新，
+    /// 核心时序坑：必须先备好所有反射对象，再写桶，再刷新，
     /// 刷新后验证 PropertyOrganizer.PropertyOrganization 真含本键；不含则回滚桶，
     /// 否则 UI.cs:677 走专属桶却取不到 → KeyNotFoundException（比"没登记走 default"更糟）。
     ///
@@ -29,15 +28,13 @@ namespace EC_FaceSDFShadow
     internal static class MaterialEditorRegistry
     {
         private const string ShaderKey = "Rainbowing/FaceSDFOverlay";
-        private const string EnableProp = "Enable";        // F2：Float 属性，ME 写回 SetFloat("_Enable")
+        private const string EnableProp = "Enable";        // Float 属性，ME 写回 SetFloat("_Enable")
         private const string ShadowColorProp = "ShadowColor";
         private const string ThresholdBiasProp = "ThresholdBias";      // Float 滑条，ME 写回 _ThresholdBias
         private const string SoftnessAngleProp = "SoftnessAngle";    // Float 滑条，ME 写回 _SoftnessAngle
 
         private static bool _installed = true;   // 默认乐观；仅在确认 ME 不存在时置 false
         private static bool _registered;
-
-        internal static bool IsRegistered => _registered;
 
         /// <summary>
         /// 尝试注入。幂等：已注册或已确认未安装直接返回；未就绪则下轮重试。
@@ -139,7 +136,8 @@ namespace EC_FaceSDFShadow
             }
         }
 
-        private static Type FindMaterialEditorBase()
+        // 以下反射样板供 MaterialEditorMarker 复用,避免两套定位/字典/空桶逻辑漂移
+        internal static Type FindMaterialEditorBase()
         {
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -185,14 +183,14 @@ namespace EC_FaceSDFShadow
             return null;
         }
 
-        private static Type FindNestedType(Type type, string nestedName)
+        internal static Type FindNestedType(Type type, string nestedName)
         {
             foreach (var nt in type.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
                 if (nt.Name == nestedName) return nt;
             return null;
         }
 
-        private static IDictionary GetXmlProperties(Type baseType)
+        internal static IDictionary GetXmlProperties(Type baseType)
         {
             var fi = baseType.GetField(
                 "XMLShaderProperties",
@@ -200,7 +198,7 @@ namespace EC_FaceSDFShadow
             return fi?.GetValue(null) as IDictionary;
         }
 
-        private static IDictionary EnsureBucket(IDictionary dict, string key)
+        internal static IDictionary EnsureBucket(IDictionary dict, string key)
         {
             if (dict.Contains(key))
                 return (IDictionary)dict[key];
@@ -220,7 +218,7 @@ namespace EC_FaceSDFShadow
             //    filterMode=null, wrapMode=null, minValue=null, maxValue=null,
             //    hidden=null, category=null)
             // 用 Activator.CreateInstance 而非 GetConstructor：binder 自动匹配重载，
-            // 绕开 round3 里 GetConstructor 精确匹配失败（ctor 跨程序集绑定脆弱）的问题。
+            // GetConstructor 跨程序集精确匹配会失败。
             var args = new object[]
             {
                 name,            // name
@@ -264,7 +262,7 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 回滚半写桶：若是本次新建则整键移除；若早已存在（本次只追加 props）则只删本次加的两项。
+        /// 回滚半写桶：若是本次新建则整键移除；若早已存在（本次只追加 props）则只删本次追加的几项。
         /// </summary>
         private static void Rollback(IDictionary dict, string key, bool bucketExisted)
         {

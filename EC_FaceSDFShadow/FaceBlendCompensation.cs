@@ -568,7 +568,7 @@ namespace EC_FaceSDFShadow
             // def_cl 基线：游戏"睁眼程度 1"实为 def_cl=23/def_op=77。若阈值图按该姿势
             // 标定，中性态会有静态偏差；把基线调到 23 即归零（默认 0 = 按完全睁眼标定）
             float defClBase = FaceSDFShadowPlugin.BlendCompDefClBase.Value;
-            // 嘴区 affine 拟合无效（残余≈原始），PoC 只开颊+眼，嘴区留观察开关
+            // 嘴区 affine 拟合无效（残余≈原始），开关仅作观察/回退用
             float mouthScale = FaceSDFShadowPlugin.BlendCompMouth.Value ? 1f : 0f;
 
             System.Array.Clear(_accum, 0, TotalCoeffs);

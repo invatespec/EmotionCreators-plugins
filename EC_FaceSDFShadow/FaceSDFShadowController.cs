@@ -10,11 +10,11 @@ namespace EC_FaceSDFShadow
     /// 逐角色的面部 SDF 阴影配置，存储到角色卡扩展数据。
     /// Enable(bool) + ShadowColor(Color) + ThresholdBias/SoftnessAngle(float)。
     ///
-    /// v0.8 起软化移角度域：shader 过渡带 = max(fwidth×1.5px 抗锯齿, SoftnessAngle/180)，
-    /// 不再随镜头距离变化。旧卡的 EdgeSoftnessPx 键（屏幕像素域）语义已失效，
+    /// 软化在角度域：shader 过渡带 = max(fwidth×1.5px 抗锯齿, SoftnessAngle/180)，
+    /// 不随镜头距离变化。旧卡的 EdgeSoftnessPx 键（屏幕像素域）语义已失效，
     /// 读取时直接忽略回退默认值，DataVersion 保持 1 —— 少一个键不影响旧版插件读新卡。
     ///
-    /// v0.10 起三个形态参数带 ME 定制锁存（Customized*）：被 ME/取色器改过的卡锁定
+    /// 三个形态参数带 ME 定制锁存（Customized*）：被 ME/取色器改过的卡锁定
     /// 该属性不受全局配置影响，标志随卡持久化。旧卡缺键 = false = 跟随全局。
     /// </summary>
     public class FaceSDFShadowController : CharaCustomFunctionController
@@ -121,7 +121,7 @@ namespace EC_FaceSDFShadow
                 ThresholdBias = ReadFloat(data.data, KeyThresholdBias, FaceSDFShadowPlugin.ThresholdBias.Value);
                 SoftnessAngle = ReadFloat(data.data, KeySoftnessAngle, FaceSDFShadowPlugin.SoftnessAngle.Value);
 
-                // v0.10 定制锁存：旧卡缺键 = false = 该属性跟随全局
+                // 定制锁存：旧卡缺键 = false = 该属性跟随全局
                 CustomizedColor = ReadBool(data.data, KeyCustomizedColor);
                 CustomizedBias = ReadBool(data.data, KeyCustomizedBias);
                 CustomizedSoftness = ReadBool(data.data, KeyCustomizedSoftness);
@@ -177,7 +177,7 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 运行时修改 Enable 状态（ME 外部控制，暂未实现）
+        /// 运行时修改 Enable 并触发重推（外部调用入口，本插件内无调用方）。
         /// </summary>
         public void SetEnable(bool enable)
         {

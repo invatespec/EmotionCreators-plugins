@@ -41,7 +41,7 @@ Focused on HEdit authoring QoL, ADV playback tooling, lighting, and memory fixes
 
 | Plugin | Version | Description |
 |--------|---------|-------------|
-| **[EC_FaceSDFShadow](EC_FaceSDFShadow/)** | 1.0.0 | Anime-style hard-edge face shadows (Uma Musume / Genshin look) that sweep with the light. Hand-drawable SDF threshold frames (template included), per-character color & shape via MaterialEditor, a screen-picking shadow color mixer, and a neck-band blend that keeps the jaw/neck seam in sync. See [USAGE.md](EC_FaceSDFShadow/USAGE.md). |
+| **[EC_FaceSDFShadow](EC_FaceSDFShadow/)** | 2.0.0 | Anime-style hard-edge face shadows (Uma Musume / Genshin look) that sweep with the light: hand-drawable SDF threshold frames, per-character color & shape via MaterialEditor, a screen-picking shadow color mixer, and a neck-band blend for the jaw/neck seam. Hair-only shadow projection onto the face in two forms — screen-space offset silhouette and light-space per-object shadow map — with multi-character isolation and accessory-hair marking via MaterialEditor shader tags. One-click display-mode presets. See [USAGE.md](EC_FaceSDFShadow/USAGE.md). |
 
 ### Memory / Performance Fixes
 

@@ -490,7 +490,7 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 迭代校准：m ← m × linear(S)/linear(V)。把本轮实测偏差乘回去，
+        /// 迭代校准：m ← m × linear(S)/linear(V)。把实测偏差乘回去，
         /// 不依赖管线模型（后处理/tonemap 的非线性由逐轮逼近吸收）。
         /// 收敛（修正比≈1）时不再发新轮次，明确告知用户已完成。
         /// </summary>

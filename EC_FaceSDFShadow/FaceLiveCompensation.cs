@@ -6,7 +6,7 @@ namespace EC_FaceSDFShadow
     /// <summary>
     /// 表情 UV 补偿·运行时实测模式。
     ///
-    /// 背景（2026-08-16 实测链）：离线 blendshape 系数表只对纯 blendshape 表情
+    /// 背景：离线 blendshape 系数表只对纯 blendshape 表情
     /// （wink/def_cl）准确；切ない等表情的颊部上移由 FBSAssist 按表情权重直接驱动
     /// （不走 cf_O_face blendshape 通道），离线表结构性缺失。本模式改为每帧
     /// BakeMesh 实测"当前姿势 vs 中性参照"的顶点位移——对任意头型（原版/mod/换头）

@@ -23,6 +23,8 @@ public static class BuildBundle
         var assetNames = new[]
         {
             "Assets/Shaders/FaceSDFOverlay.shader",
+            "Assets/Shaders/HairShadowMask.shader",
+            "Assets/Shaders/HairShadowMarker.shader",
         };
 
         var build = new AssetBundleBuild

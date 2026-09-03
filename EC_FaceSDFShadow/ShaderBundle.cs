@@ -18,11 +18,15 @@ namespace EC_FaceSDFShadow
         private const string ResourceName = "EC_FaceSDFShadow.Resources.ec_facesdf.unity3d";
 
         internal const string OverlayName = "Rainbowing/FaceSDFOverlay";
+        internal const string HairMaskName = "Rainbowing/HairShadowMask";
+        internal const string MarkerName = "Rainbowing/HairShadowMarker";
 
         private static Dictionary<string, Shader> _shaders;
         private static bool _loadAttempted;
 
         internal static Shader Overlay => Get(OverlayName);
+        internal static Shader HairMask => Get(HairMaskName);
+        internal static Shader Marker => Get(MarkerName);
 
         private static Shader Get(string name)
         {

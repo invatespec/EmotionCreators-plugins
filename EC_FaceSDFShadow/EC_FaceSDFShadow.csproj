@@ -10,8 +10,8 @@
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
         <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-        <AssemblyVersion>1.0.0.0</AssemblyVersion>
-        <FileVersion>1.0.0.0</FileVersion>
+        <AssemblyVersion>2.0.0.0</AssemblyVersion>
+        <FileVersion>2.0.0.0</FileVersion>
         <!-- UnityProject 是给 Unity 编辑器用的，不参与 dotnet 编译 -->
         <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     </PropertyGroup>
@@ -36,11 +36,11 @@
     <ItemGroup>
         <!-- 角色卡扩展数据依赖：ESF + ECAPI -->
         <Reference Include="EC_ExtensibleSaveFormat">
-            <HintPath>G:\DL\z_Games\emotioncreators\BepInEx\plugins\EC_BepisPlugins\EC_ExtensibleSaveFormat.dll</HintPath>
+            <HintPath>../../Reference/ReferencePlugins/EC_ExtensibleSaveFormat.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="ECAPI">
-            <HintPath>G:\DL\z_Games\emotioncreators\BepInEx\plugins\EC_Plugins\ECAPI.dll</HintPath>
+            <HintPath>../../Reference/ReferencePlugins/ECAPI.dll</HintPath>
             <Private>False</Private>
         </Reference>
     </ItemGroup>
@@ -48,5 +48,40 @@
         <ItemGroup>
             <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" />
         </ItemGroup>
+    </Target>
+
+    <!-- Unity 构建产物 → Resources/(被嵌进 DLL 的那份)。
+         Inputs/Outputs 使其只在产物更新时才拷,不会用旧 bundle 覆盖新的。
+         没有这一步时的故障形态:改了 shader、Unity 也重新打了包,但 DLL 里嵌的还是
+         上一版 —— 运行期只表现为"某个 shader 加载不到、对应功能静默降级",
+         查代码永远查不出来(2026-08-28 实测:17_HairFadeBand 因此白查一轮)。 -->
+    <Target Name="SyncShaderBundle" BeforeTargets="BeforeBuild;PrepareForBuild"
+            Inputs="UnityProject/AssetBundles/ec_facesdf.unity3d"
+            Outputs="Resources/ec_facesdf.unity3d"
+            Condition="Exists('UnityProject/AssetBundles/ec_facesdf.unity3d')">
+        <Message Importance="high"
+                 Text="[FaceSDF] shader bundle 有更新,同步到 Resources/ 后再嵌入" />
+        <Copy SourceFiles="UnityProject/AssetBundles/ec_facesdf.unity3d"
+              DestinationFiles="Resources/ec_facesdf.unity3d" />
+    </Target>
+
+    <!-- shader 源码比 bundle 新 = 改了 shader 但没在 Unity 里重打包。
+         dotnet build 无法代打(要 Unity 编辑器),所以只能告警,不能自动修。
+         逐文件显式比时间戳(不用 Inputs/Outputs 的隐式增量:多输入单输出的比较语义
+         容易误报,调不动)。批处理 %(_ShaderSrc...) 使告警能点名具体哪个 shader 旧了。 -->
+    <Target Name="WarnStaleShaderBundle" AfterTargets="SyncShaderBundle"
+            Condition="Exists('UnityProject/AssetBundles/ec_facesdf.unity3d')">
+        <ItemGroup>
+            <_ShaderSrc Include="UnityProject/Assets/Shaders/*.shader" />
+            <_BundleF Include="UnityProject/AssetBundles/ec_facesdf.unity3d" />
+        </ItemGroup>
+        <PropertyGroup>
+            <!-- 先 transform 成普通字符串,再 Parse:%() 直接写在 PropertyGroup 里会
+                 让整个 PropertyGroup 进入批处理语义,不可控 -->
+            <_BundleMod>@(_BundleF->'%(ModifiedTime)')</_BundleMod>
+            <_BundleTicks>$([System.DateTime]::Parse('$(_BundleMod)').Ticks)</_BundleTicks>
+        </PropertyGroup>
+        <Warning Condition="$([System.DateTime]::Parse('%(_ShaderSrc.ModifiedTime)').Ticks) &gt; $(_BundleTicks)"
+                 Text="[FaceSDF] %(_ShaderSrc.Filename)%(_ShaderSrc.Extension) 比 bundle 新:请先在 Unity 里重建 bundle(BuildBundle.cs),否则本次构建嵌入的是旧 shader。" />
     </Target>
 </Project>

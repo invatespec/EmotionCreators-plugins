@@ -7,11 +7,10 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// mode 2 阈值图的取图入口与缓存。
+    /// 面部阈值图的取图入口与缓存。
     ///
     /// 来源只有手绘素材：<see cref="FaceManualSDFBaker"/> 的角度帧，其次同目录的 SDF.png。
-    /// 拿不到就返回 null，叠加层不生效。v0.7 移除了两条旧来源——代码生成的固定 UV 模板
-    /// 和 8 位 <c>&lt;mesh&gt;_structured.png</c>，两者实测都把三角光/鼻影画成圆圈。
+    /// 拿不到就返回 null，叠加层不生效。
     ///
     /// 另对外提供 UV coverage 光栅化与膨胀，供 manual 路径复用。
     /// </summary>
@@ -19,7 +18,7 @@ namespace EC_FaceSDFShadow
     {
         internal const int Size = SDFTextureResolution.DefaultSize;
 
-        // 最初按 512 texel 标定；随输出尺寸同比放大，保持 UV 空间宽度不变。
+        // 按 512 texel 标定；随输出尺寸同比放大，保持 UV 空间宽度不变。
         private const int DilationPasses =
             4 * Size / SDFTextureResolution.TemplateCalibrationSize;
 

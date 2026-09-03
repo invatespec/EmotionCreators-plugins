@@ -54,7 +54,41 @@ namespace EC_FaceSDFShadow
             return false;
         }
 
-        internal static int AppliedCount => _registry.Count;
+#if DEBUG
+        /// <summary>
+        /// [HairDiag] 发影混合架构实值:全局量一行 + 逐角色绑定一行。仅 DEBUG 构建。
+        /// 坑:材质级 GetTexture/GetVector 对未列 Properties 的 uniform 恒报
+        /// "doesn't have a property"(Set 可用、Get 不可用),绑定态必须从
+        /// HairShadowPass 渲染侧字典读,不得读材质。
+        /// </summary>
+        internal static void LogHairDiag()
+        {
+            var dir = Shader.GetGlobalVector(ShaderIDs.HairLightDir);
+            FaceSDFShadowPlugin.Log.LogInfo(string.Format(
+                "[HairDiag] shiftXY(g)={0:F3}/{1:F3} baseXY(g)={2:F3}/{3:F3} " +
+                "lightDir(g)=({4:F2},{5:F2},{6:F2}) form(g)={7:F0}",
+                Shader.GetGlobalFloat(ShaderIDs.HairShadowShiftX),
+                Shader.GetGlobalFloat(ShaderIDs.HairShadowShiftY),
+                Shader.GetGlobalFloat(ShaderIDs.HairShadowBaseX),
+                Shader.GetGlobalFloat(ShaderIDs.HairShadowBaseY),
+                dir.x, dir.y, dir.z,
+                Shader.GetGlobalFloat(ShaderIDs.HairShadowForm)));
+
+            int idx = 0;
+            foreach (var kvp in _registry)
+            {
+                var m = kvp.Value.OverlayMat;
+                if (m == null) continue;
+                bool rtBound = HairShadowPass.TryGetRT(kvp.Key, out var rt);
+                FaceSDFShadowPlugin.Log.LogInfo(string.Format(
+                    "[HairDiag] chara#{0} weight={1:F3} rt={2} headBone={3}",
+                    idx++,
+                    m.GetFloat(ShaderIDs.HairShadowWeight),
+                    rtBound ? "bound" : "NULL",
+                    kvp.Value.HeadBone != null ? "ok" : "null"));
+            }
+        }
+#endif
 
         /// <summary>
         /// 每帧把头骨的 world→局部矩阵和表情 UV 补偿系数推给所有 overlay 材质。
@@ -85,9 +119,233 @@ namespace EC_FaceSDFShadow
                     continue;
                 }
 
-                mat.SetMatrix(ShaderIDs.HeadWorldToLocal, entry.BindFix * head.worldToLocalMatrix);
+                var headWorldToLocal = entry.BindFix * head.worldToLocalMatrix;
+                mat.SetMatrix(ShaderIDs.HeadWorldToLocal, headWorldToLocal);
                 mat.SetFloat(ShaderIDs.UseHeadMatrix, 1f);
             }
+        }
+
+        // ---- 发影 v2 重画的全局推送 ----
+        private static Light _hairLight;
+        private static int _hairLightScansLeft;
+        private static bool _hairLightWarned;
+
+        /// <summary>光空间深度门 bias(米):贴头皮斑驳 ↔ 眨眼吞影的实测折中值,定死不暴露。</summary>
+        internal const float HairShadowBiasMeters = 0.005f;
+
+        // 光空间矩阵现在逐角色写入各 overlay/mask 材质(多角色),不再 SetGlobal。
+        internal struct LightSpaceFrame
+        {
+            internal Matrix4x4 View;
+            internal Matrix4x4 VP;
+            internal Vector4 Box;
+        }
+
+        /// <summary>
+        /// 每帧推发影几何偏移用的全局(CB 绘制不走 ForwardBase,拿不到
+        /// _WorldSpaceLightPos0):灯向/移动量程(02/03)/基础偏移(04/05)。灯只取
+        /// 相机层级下的平行光(见 IsUnderCamera),锁光插件转灯本体自动跟随;找不到
+        /// 推零向量 → 偏移 0,RT 只在头发原位有值,脸像素采不到 → 发影自动静默。
+        /// 权重/软核走 PushConfig 推给 overlay 消费端。
+        /// 多角色:灯向/形态/量程保持全局;RT/光空间三件套逐角色写材质
+        /// (材质属性优先于全局,shader 源码零改动)。
+        /// </summary>
+        internal static void PushHairLight()
+        {
+            bool lightAlive = _hairLight != null
+                && _hairLight.enabled
+                && _hairLight.gameObject.activeInHierarchy;
+            if (!lightAlive || --_hairLightScansLeft <= 0)
+            {
+                RescanHairLight();
+                _hairLightScansLeft = 15;
+            }
+
+            Shader.SetGlobalFloat(ShaderIDs.HairShadowShiftX,
+                FaceSDFShadowPlugin.HairShadowShiftX.Value);
+            Shader.SetGlobalFloat(ShaderIDs.HairShadowShiftY,
+                FaceSDFShadowPlugin.HairShadowShiftY.Value);
+            Shader.SetGlobalFloat(ShaderIDs.HairShadowBaseX,
+                FaceSDFShadowPlugin.HairShadowBaseX.Value);
+            Shader.SetGlobalFloat(ShaderIDs.HairShadowBaseY,
+                FaceSDFShadowPlugin.HairShadowBaseY.Value);
+
+            // forward 是光行进方向,"指向光源"取负(与 _WorldSpaceLightPos0 同语义)
+            Vector3 lightDir = _hairLight != null
+                ? -_hairLight.transform.forward : Vector3.zero;
+            Shader.SetGlobalVector(ShaderIDs.HairLightDir, lightDir);
+
+            // 01/06 形态与软边:两形态都推(消费端靠形态分支),06 的 LightSpace 路径
+            // 沿用 _HairShadowBlur uniform 名
+            int form = (int)FaceSDFShadowPlugin.HairShadowForm.Value;
+            Shader.SetGlobalFloat(ShaderIDs.HairShadowForm, form);
+            Shader.SetGlobalFloat(ShaderIDs.HairShadowBlur,
+                FaceSDFShadowPlugin.HairShadowSoft.Value);
+            // 深度门 bias 定死为实测折中值(0.005:贴头皮斑驳 ↔ 眨眼吞影),不暴露配置
+            Shader.SetGlobalFloat(ShaderIDs.HairShadowBias, HairShadowBiasMeters);
+
+            // 逐角色推送:RT 配对绑定(两形态都要——不写即采空)
+            // + 形态 B 的光空间三件套(逐角色头位各算一份)。
+            foreach (var kvp in _registry)
+            {
+                var entry = kvp.Value;
+                var mat = entry.OverlayMat;
+                if (mat == null) continue;
+
+                if (!HairShadowPass.TryGetRT(kvp.Key, out var rt)) continue;
+                mat.SetTexture(ShaderIDs.HairShadowRTGlobal, rt);
+
+                if (form > 0)
+                {
+                    // 盒参数先推:无灯/无头骨时矩阵留零,但 Box 有值消费端
+                    // 只是 uv=盒心、selfDepth=0 → 恒无影,不会 NaN(除零防护)。
+                    var box = new Vector4(LightBoxHalfExtent,
+                        1f / HairShadowPass.LightRTSize, 0f, 0f);
+                    mat.SetVector(ShaderIDs.HairLightBox, box);
+
+                    var head = entry.HeadBone;
+                    if (lightDir.sqrMagnitude >= 1e-6f
+                        && head != null && !head.Equals(null))
+                    {
+                        var frame = BuildLightSpaceFrame(lightDir, head.position);
+                        // overlay 只声明 View/Box(VP 仅供 mask 光栅化,别往这推)
+                        mat.SetMatrix(ShaderIDs.HairLightView, frame.View);
+                        // 渲染侧同角色 mask 材质同帧同矩阵;统一刷"最后角色帧值"
+                        // 会让其他角色头发投影出盒、RT 全黑无影
+                        HairShadowPass.PushMaskMatrices(kvp.Key, frame);
+                    }
+                }
+            }
+            // 遮罩侧矩阵已在上面的循环里逐角色推送,此处无需再统一刷新
+        }
+
+        // 光空间正交盒:半宽 0.20m 恰好罩住头(直径约 0.25m),相机沿光向退 1.0m。
+        // 盒越小 texel 越密——0.45m 半宽下 1 texel≈4 个屏幕像素,特写时边缘显影成
+        // 阶梯锯齿;0.20m 下约 0.9 个像素(配 2048² RT)。代价是长发/侧发被裁出盒,
+        // 但那些本来就投不到脸上。
+        internal const float LightBoxHalfExtent = 0.20f;
+        private const float LightBoxCamDist = 1.0f;
+        // 盒心相对头骨上移:头骨在颈上端/下颌高度,头发体积中心比它高约 7cm,
+        // 不偏置发顶会顶出盒上边界。
+        internal const float LightBoxCenterUp = 0.07f;
+
+        /// <summary>
+        /// 形态 B 光空间三件套按角色计算。VP 只出光栅化位置(过 GL.GetGPUProjectionMatrix,
+        /// 平台 FlipY/z 范围差异全关在里面);View+Box 让遮罩 pass 1 与 overlay 消费端
+        /// 用同一公式算 UV/深度——渲染/采样映射错位类坑在此结构性不可达。
+        /// </summary>
+        internal static LightSpaceFrame BuildLightSpaceFrame(Vector3 lightDir, Vector3 head)
+        {
+            const float e = LightBoxHalfExtent;
+            Vector3 l = ClampLightElevation(lightDir.normalized);
+            Vector3 boxCenter = head + Vector3.up * LightBoxCenterUp;
+            // 摆位:相机在光源侧看向头(shadow map 标准摆法)。反过来(头后看向光)
+            // 会让刘海深度比脸远,深度门永拒。
+            var trs = Matrix4x4.TRS(boxCenter + l * LightBoxCamDist,
+                                    Quaternion.LookRotation(-l), Vector3.one);
+            // Unity 相机看 -z,手算 view 必须补 z 翻转
+            Matrix4x4 view = Matrix4x4.Scale(new Vector3(1f, 1f, -1f)) * trs.inverse;
+            Matrix4x4 ortho = Matrix4x4.Ortho(-e, e, -e, e, 0.01f, LightBoxCamDist * 2f);
+
+            return new LightSpaceFrame
+            {
+                View = view,
+                VP = GL.GetGPUProjectionMatrix(ortho, true) * view,
+                Box = new Vector4(e, 1f / HairShadowPass.LightRTSize, 0f, 0f),
+            };
+        }
+
+        /// <summary>
+        /// Ctrl+F6 边沿触发的光空间对齐诊断,按一次打一次。
+        /// 逐角色打印头骨在光空间盒内的 uv/深度:判据 uv.x≈0.5、uv.y≈0.325
+        /// (盒心=头骨+up×0.07)、headDepth≈CamDist=1.0。偏了=矩阵/头位问题。
+        /// </summary>
+        internal static void LogHairLightSpaceDiag()
+        {
+            if (_hairLight == null
+                || (-_hairLight.transform.forward).sqrMagnitude < 1e-6f)
+            {
+                FaceSDFShadowPlugin.Log.LogWarning(
+                    "[HairLS] no valid hair light; light-space diag unavailable");
+                return;
+            }
+            var lightDir = -_hairLight.transform.forward;
+            int idx = 0;
+            foreach (var kvp in _registry)
+            {
+                var head = kvp.Value.HeadBone;
+                if (head == null || head.Equals(null))
+                {
+                    FaceSDFShadowPlugin.Log.LogInfo(
+                        $"[HairLS] chara#{idx++} head bone unresolved; no matrix");
+                    continue;
+                }
+                var frame = BuildLightSpaceFrame(lightDir, head.position);
+                Vector3 hv = frame.View.MultiplyPoint3x4(head.position);
+                float e = LightBoxHalfExtent;
+                FaceSDFShadowPlugin.Log.LogInfo(
+                    $"[HairLS] chara#{idx++} headUV=({hv.x / e * 0.5f + 0.5f:F3}," +
+                    $"{hv.y / e * 0.5f + 0.5f:F3}) headDepth={-hv.z:F3}");
+            }
+        }
+
+        /// <summary>
+        /// 投影用光向的仰角钳位 [10°,50°]:近水平时正交盒沿光向压扁(深度精度塌),
+        /// 近竖直时方位角抖动被放大。只钳这一路,视觉光与形态 A 不受影响。
+        /// </summary>
+        private static Vector3 ClampLightElevation(Vector3 l)
+        {
+            float elev = Mathf.Asin(Mathf.Clamp(l.y, -1f, 1f)) * Mathf.Rad2Deg;
+            float target = Mathf.Clamp(elev, 10f, 50f);
+            if (Mathf.Abs(target - elev) < 0.01f) return l;
+
+            var h = new Vector2(l.x, l.z);
+            // 近竖直光方位退化,兜底取世界 +Z(只需一个确定方位,不求连续)
+            h = h.sqrMagnitude > 1e-8f ? h.normalized : new Vector2(0f, 1f);
+            float rad = target * Mathf.Deg2Rad;
+            float c = Mathf.Cos(rad);
+            return new Vector3(h.x * c, Mathf.Sin(rad), h.y * c);
+        }
+
+        private static void RescanHairLight()
+        {
+            Light best = null;
+            float bestScore = -1f;
+            foreach (var l in Object.FindObjectsOfType<Light>())
+            {
+                if (l == null || l.type != LightType.Directional || !l.enabled
+                    || !l.gameObject.activeInHierarchy) continue;
+                if (!IsUnderCamera(l.transform)) continue;
+                float score = l.intensity * Mathf.Max(l.color.r, l.color.g, l.color.b);
+                if (score > bestScore) { bestScore = score; best = l; }
+            }
+            // 锁光类插件会把角色光 reparent 出相机层级(如 MakerAdditions 的
+            // lockCamlight):灯仍存活、方向正确,只是父链无 Camera。此时保留既有
+            // 引用不清空——只有真死/禁用/非平行光才置空,避免锁光期间发影失效。
+            if (best == null && _hairLight != null && _hairLight.type == LightType.Directional
+                && _hairLight.enabled && _hairLight.gameObject.activeInHierarchy)
+                return;
+            if (best == null && !_hairLightWarned)
+            {
+                // 无灯=发影静默失效,无日志用户无从分辨"没建"还是"没灯"
+                _hairLightWarned = true;
+                FaceSDFShadowPlugin.Log.LogWarning(
+                    "HairShadow: no directional light under a camera; hair shadow disabled.");
+            }
+            _hairLight = best;
+        }
+
+        /// <summary>
+        /// 只认挂在相机层级下的平行光:EC 里角色打光恒在相机下(捏人
+        /// CustomScene/CamBase/Camera/、其他场景 Camera/Main Camera/),锁光插件控的
+        /// 也是它;MapLight/ 是地图环境光,不该驱动发影。
+        /// 不回落"场景最亮"——ADV 场景两盏灯强度都可调,回落会在地图光调亮时跳灯。
+        /// </summary>
+        private static bool IsUnderCamera(Transform t)
+        {
+            for (var p = t.parent; p != null; p = p.parent)
+                if (p.GetComponent<Camera>() != null) return true;
+            return false;
         }
 
         private static Texture2D WhiteRamp
@@ -181,6 +439,7 @@ namespace EC_FaceSDFShadow
 
                     SyncRamp(entry, effectiveEnable);
                     SyncFaceShadowG(entry, effectiveEnable);
+                    SyncReceiveShadows(smr, effectiveEnable);
                     PushConfig(entry.OverlayMat);
                     // 02/04/05 全局跟随 + ME 定制锁存（与 PushConfigAll 同一入口，漏一条会半坏）
                     if (SyncPerMaterialParams(ref entry))
@@ -325,6 +584,7 @@ namespace EC_FaceSDFShadow
             }
             SyncRamp(entry, controller.Enable);
             SyncFaceShadowG(entry, controller.Enable);
+            SyncReceiveShadows(smr, controller.Enable && FaceSDFShadowPlugin.Enabled.Value);
             _registry[smr] = entry;
         }
 
@@ -569,7 +829,7 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 按配置排除/衰减面部实时自阴影：写 main_skin 实例的 _FaceShadowG（强度标量，群主实测）。
+        /// 按配置排除/衰减面部实时自阴影：写 main_skin 实例的 _FaceShadowG（强度标量）。
         /// 0=原版实时阴影；1=自阴影（自身投影）消失，**头发在脸上的投影只稍微变淡、大体保留**；
         /// 中间值=部分衰减。机制与 _RampG 相同：SetFloat 静默建 local override，
         /// 只影响面部材质实例，身体/头发不受影响（实测证实）。
@@ -586,6 +846,27 @@ namespace EC_FaceSDFShadow
                 if (mats[i] == null) continue;
                 mats[i].SetFloat(ShaderIDs.FaceShadowG, g);
             }
+        }
+
+        /// <summary>
+        /// 脖颈干净底色：跟随 General 00_Enabled 主开关（× 逐角色 _Enable 软关），
+        /// 与 HairShadow 00_ShadowEnabled 无关——底色是颈带复制品正确工作的前提，
+        /// 收窄后关发影开关不会连带还原底色。软关闭/卸载还原 receiveShadows=true。
+        /// 幂等重写（Poll 自愈，换头重建后也覆盖）。注意与 ME 的 receiveShadows
+        /// 归属：生效期间 ME 面板的同名开关会被每轮轮询压回。
+        /// </summary>
+        private static void SyncReceiveShadows(SkinnedMeshRenderer smr, bool enable)
+        {
+            // enable = 总开关 × 材质 _Enable（调用方传入），与发影权重判定解耦
+            smr.receiveShadows = !enable;
+
+            // FaceNoSelfCast：屏幕空间阴影图分不出投影来源，脸自投影回来是纯黑；
+            // cast=Off 从源头切掉且外部投影保留。ShadowsOnly 会使 renderer 整个
+            // 隐形（用户实测），禁止使用。
+            if (enable && FaceSDFShadowPlugin.FaceNoSelfCast.Value)
+                smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            else
+                smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
         }
 
         private static void PushConfig(Material mat)
@@ -608,6 +889,24 @@ namespace EC_FaceSDFShadow
             mat.SetFloat(ShaderIDs.NeckRampBias, FaceSDFShadowPlugin.NeckRampBias.Value);
             mat.SetFloat(ShaderIDs.NeckEdgeSoftness, FaceSDFShadowPlugin.NeckEdgeSoftness.Value);
             mat.SetFloat(ShaderIDs.NeckBandTopV, FaceSDFShadowPlugin.NeckBandTopV.Value);
+            mat.SetFloat(ShaderIDs.NeckReplicaCap, FaceSDFShadowPlugin.NeckReplicaCap.Value);
+            mat.SetFloat(ShaderIDs.NeckShadowCompensation, FaceSDFShadowPlugin.NeckShadowCompensation.Value);
+
+            // 阴影图可用性。自阴影关=奇数质量档 → QualitySettings.shadows=Disable，
+            // 屏幕空间阴影图未绑定、不可采，shader 侧 attenEff 退化为 1（独立判光合成）。
+            mat.SetFloat(ShaderIDs.ShadowmapAvail,
+                QualitySettings.shadows == ShadowQuality.Disable ? 0f : 1f);
+
+            // 发影(00)：权重 = 总开关 × 材质 _Enable × 00_ShadowEnabled。开 = 满权重 1，
+            // 关 = 0。00 只管发影；干净底色(receiveShadows)由 SyncReceiveShadows
+            // 按 总开关 × _Enable 独立判定。02~05 量程/偏移与灯向走全局
+            // （HairShadowMask 顶点偏移用，PushHairLight）
+            bool shadowEnabled = FaceSDFShadowPlugin.Enabled.Value
+                && mat.GetFloat(ShaderIDs.Enable) >= 0.5f
+                && FaceSDFShadowPlugin.ShadowEnabled.Value;
+            mat.SetFloat(ShaderIDs.HairShadowWeight, shadowEnabled ? 1f : 0f);
+            // 06 软边：形态 A 核间距 / LightSpace 沿用 _HairShadowBlur 名
+            mat.SetFloat(ShaderIDs.HairShadowSoft, FaceSDFShadowPlugin.HairShadowSoft.Value);
         }
 
         /// <summary>
@@ -709,6 +1008,7 @@ namespace EC_FaceSDFShadow
                 bool effectiveEnable = materialEnable && FaceSDFShadowPlugin.Enabled.Value;
                 SyncRamp(entry, effectiveEnable);
                 SyncFaceShadowG(entry, effectiveEnable);
+                SyncReceiveShadows(smr, effectiveEnable);
             }
         }
 
@@ -754,6 +1054,13 @@ namespace EC_FaceSDFShadow
                 var entry = kvp.Value;
 
                 RestoreRamp(entry);
+
+                // 干净底色的 renderer 状态还原（与 overlay 是否完整无关，活着就还原）
+                if (smr != null && !smr.Equals(null))
+                {
+                    smr.receiveShadows = true;
+                    smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                }
 
                 if (smr != null && !smr.Equals(null) && IsOverlayIntact(smr, entry))
                     smr.sharedMaterials = entry.OrigMats;
@@ -803,11 +1110,41 @@ namespace EC_FaceSDFShadow
         internal static readonly int SoftnessAngle = Shader.PropertyToID("_SoftnessAngle");
         internal static readonly int ThresholdBias = Shader.PropertyToID("_ThresholdBias");
         internal static readonly int EndpointSnap = Shader.PropertyToID("_EndpointSnap");
-        // 颈带 N·L 复制品（路线 1.1）：光照项标定旋钮 + 形态/范围 uniform
+        // 颈带 N·L 复制品：光照项标定旋钮 + 形态/范围 uniform
         internal static readonly int NeckRampScale = Shader.PropertyToID("_NeckRampScale");
         internal static readonly int NeckRampBias = Shader.PropertyToID("_NeckRampBias");
         internal static readonly int NeckEdgeSoftness = Shader.PropertyToID("_NeckEdgeSoftness");
         internal static readonly int NeckBandTopV = Shader.PropertyToID("_NeckBandTopV");
+        // 复制品压黑上限（默认 1 = 不设限）
+        internal static readonly int NeckReplicaCap = Shader.PropertyToID("_NeckReplicaCap");
+        // 真实阴影消费权重（默认 1 = 合成消费；0 = 旧式独立判光）
+        internal static readonly int NeckShadowCompensation = Shader.PropertyToID("_NeckShadowCompensation");
+        // 阴影图可用性（QualitySettings.shadows != Disable；0 时 shader 不采样）
+        internal static readonly int ShadowmapAvail = Shader.PropertyToID("_ShadowmapAvail");
+        // 发影权重(00,总开关×_Enable×00_ShadowEnabled 门控,PushConfig 推 overlay 消费端)
+        internal static readonly int HairShadowWeight = Shader.PropertyToID("_HairShadowWeight");
+        // 发影软边(06,0..1)——形态 A 核间距;形态 B 沿用 _HairShadowBlur 名
+        internal static readonly int HairShadowSoft = Shader.PropertyToID("_HairShadowSoft");
+        // 发影灯向全局(CB 绘制不走 ForwardBase,由 PushHairLight 每帧推)
+        internal static readonly int HairLightDir = Shader.PropertyToID("_HairLightDir");
+        internal static readonly int HairShadowRTGlobal = Shader.PropertyToID("_HairShadowRT");
+        // 发影 X/Y 移动量程(02/03,米,光驱动百分比位移的满量程)
+        internal static readonly int HairShadowShiftX = Shader.PropertyToID("_HairShadowShiftX");
+        internal static readonly int HairShadowShiftY = Shader.PropertyToID("_HairShadowShiftY");
+        // 发影初始 X/Y 偏移(04/05,米,不依赖光向的基础位移)
+        internal static readonly int HairShadowBaseX = Shader.PropertyToID("_HairShadowBaseX");
+        internal static readonly int HairShadowBaseY = Shader.PropertyToID("_HairShadowBaseY");
+        // 发影形态(01,0=屏幕位移/1=光空间)、软边值源(06,uniform 名 _HairShadowBlur)
+        // 与光空间深度门 bias(定死常量,无配置项)
+        internal static readonly int HairShadowForm = Shader.PropertyToID("_HairShadowForm");
+        internal static readonly int HairShadowBlur = Shader.PropertyToID("_HairShadowBlur");
+        internal static readonly int HairShadowBias = Shader.PropertyToID("_HairShadowBias");
+        // 光空间三件套:VP 只出光栅化位置(已过 GL.GetGPUProjectionMatrix),
+        // View+Box 供渲染与采样两侧用同一公式算 UV/深度(见 HairShadowMask pass 1)
+        internal static readonly int HairLightVP = Shader.PropertyToID("_HairLightVP");
+        internal static readonly int HairLightView = Shader.PropertyToID("_HairLightView");
+        internal static readonly int HairLightBox = Shader.PropertyToID("_HairLightBox");
+
         internal static readonly int UseSDFTex = Shader.PropertyToID("_UseSDFTex");
         internal static readonly int SDFTex = Shader.PropertyToID("_SDFTex");
         internal static readonly int HeadWorldToLocal = Shader.PropertyToID("_HeadWorldToLocal");

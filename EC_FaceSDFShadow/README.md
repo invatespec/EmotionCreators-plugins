@@ -3,32 +3,33 @@
 面部 SDF 硬边阴影插件。在角色脸上叠一层随光照旋转扫掠的硬边阴影，
 得到赛马娘/原神那类动漫风格的明暗分界。
 
-**当前状态：v1.0.0。需要先构建 shader bundle 才能运行。**
+**当前状态：v2.0.0。需要先构建 shader bundle 才能运行。**
 
 > 普通游戏用户请看 **[USAGE.md](USAGE.md)**（只讲用法）；
 > 本 README 面向开发/维护者，含实现契约与机制说明。
 
-> v0.6.0 路线 C：Enable + ShadowColor 改为逐角色保存到角色卡（ESF 扩展数据），
-> 多角色场景各按各的配置独立生效。首次装插件默认 Enable=true（保持"装上即生效"）。
->
-> v0.7.0 精简为单一路径：阈值图只来自手绘角度帧，移除代码生成的固定 UV 模板、阶段 1/2 烘焙与深度自遮挡 PoC。
->
-> v0.9.0 路线 1：面部 UV 颈带增加 N·L 复制品 crossfade——颈带内用世界法线·光向过
-> 软硬可调的 smoothstep 出阴影量，再走与面部 SDF 分支同款的 `02_ShadowColor` 混色，
-> 补上 SDF 窗口 yaw-only 缺失的 pitch 响应（见 StructuredSDF 节颈带配置）。不查 ramp 纹理。
->
-> v0.10.0 全局参数跟随：`02_ShadowColor`/`04_ThresholdBias`/`05_SoftnessAngle` 从
-> "仅新角色初始值"改为**持续生效**——未被 ME 定制该属性的角色实时跟随全局（scene 里
-> 没有 ME 界面也能调），ME 改过（含取色器应用）的卡锁定该属性、随卡持久化。
-> 同时配置键名重组（Advanced/StructuredSDF/BlendCompensation 去数字前缀，
-> ColorMixerKey 移入 Advanced），表情 UV 补偿默认开启。
->
-> v0.11.0 取色器光强对齐：取色器窗口新增「对齐 ADV 光强（0.9）」选框（捏人 direct light
-> 固定 1.0、比 advscene 常用的 0.9 亮，导致反算色偏亮）；默认 `02_ShadowColor` 更新为
-> (0.79, 0.43, 0, 0.27)（0.9 光强下定标的新值，已有 cfg/角色卡不受影响）。
->
-> v1.0.0：首个正式版。默认值全部经实测定标；新增面向普通用户的使用说明
-> [USAGE.md](USAGE.md) 与手绘帧图例 `Resources/exampleSDF/`（0.png..8.png，可照抄模板）。
+## 版本史（仅保留各版本引入的现役能力）
+
+- **v0.6~v0.11**：逐角色配置（ESF 扩展数据，多角色独立生效）；阈值图精简为手绘
+  角度帧单一路径；颈带 N·L 复制品 crossfade 补 pitch 响应；全局参数持续跟随 +
+  ME 定制锁存；取色器光强对齐。
+- **v1.0.0**：首个正式版，默认值实测定标；USAGE.md 与手绘帧图例模板。
+- **v1.1.0**：颈带阴影融合——复制品消费游戏真实阴影（先半兰伯特后乘遮挡），
+  治缝两侧叠加过黑；代价：主域原生投影被清干净（颈带内由插件恢复）。机制见
+  `docs/ec-knowledge/04-troubleshooting/overlay-native-shadow-stacking.md`。
+- **v1.2~v1.3**：全脸遮挡恢复实验（审美否决，v2.0.0 移除）；发影 v2 混合架构
+  （屏幕域 clip 位移 + RT 接收 + 单侧深度门 + max 融合）。
+- **v1.4.0**：发影形态 B（光空间真投影，自建 hair-only shadow map，影贴真实
+  脸 mesh、随光向与镜头解耦）+ 多角色逐主体 RT/矩阵隔离。
+- **v1.5.0~v1.5.1**：饰品头发参与发影（ME 哑 shader 标记，材质级玩家意志随卡
+  持久化）；深度门单侧软化窗（眨眼吞影修复）。
+- **v2.0.0（当前）**：配置大改——发影项移入独立 **HairShadow** 栏重排
+  （`00_ShadowEnabled` 默认开 / `01_Form` 枚举 ScreenSpace/LightSpace /
+  `02~05_SS_*` 屏幕空间四件 / `06_Soft` 合并连续滑条 / `07_LS_Resolution`）；
+  删 `09_FaceOcclusionRestore`（审美否决）、`19_HairShadowParts`（固定前发）、
+  `22_HairShadowBias`（常量化 0.005）；干净底色与 `FaceNoSelfCast`（Advanced 节）
+  跟随 General 主开关；Advanced 节 `DisplayPreset` 显示模式一键预设（标定于
+  阴影密度 0.55）。pitch 渐暗门：光仰角进入头轴 37° 锥内渐变全暗（顶/底对称）。
 
 ## 工作原理
 
@@ -42,7 +43,7 @@
 ### 面部实时自阴影排除（07_FaceRealtimeShadowG）
 
 EC 脸上除了 ramp 阴影，还有一层 Unity 实时自阴影（`SHADOWS_SCREEN` 采样 `_ShadowMapTexture`），
-与 SDF 硬边阴影叠加会显得脏乱。`main_skin` 的 `_FaceShadowG` 属性（群主实测）是
+与 SDF 硬边阴影叠加会显得脏乱。`main_skin` 的 `_FaceShadowG` 属性是
 **强度标量**：0=原版实时阴影，1=最强排除，中间值连续衰减。
 
 - **设 1**：脸上自阴影（鼻侧/颊侧等自身投影）消失，只剩 SDF 硬边阴影；
@@ -69,7 +70,7 @@ EC 的 ramp 阴影由 `Shader.SetGlobalTexture(_RampG, tex)` 设的**全局**贴
 > 那会连身体一起中和。详见知识库
 > [角色材质叠加层模式](../../docs/ec-knowledge/03-patterns/character-material-overlay-pattern.md)。
 
-## 逐角色配置（v0.6.0 路线 C）
+## 逐角色配置（ESF 扩展数据）
 
 Enable 与 ShadowColor 存到角色卡扩展数据（ESF），多角色场景各角色独立控制：
 
@@ -201,6 +202,26 @@ v0.6.0 起依赖前置插件（游戏通常已装）：
 | NeckRampBias | 0 | 颈带 N·L 复制品的光照项偏移（t = NdotL01×NeckRampScale + 本项），与 NeckRampScale 配套定标 |
 | NeckEdgeSoftness | 0.008 | 颈带复制品的阴影边缘软化半宽 w（s = smoothstep(0.5-w, 0.5+w, t)）。0=硬边；越大边缘越软。纯显示参数，改值即生效、不重烘焙 |
 | NeckBandTopV | 0.2 | 颈带 crossfade 带顶 V 坐标（带底 0.05 恒为纯复制品）。**上拉**可盖住下颌两侧遗留的静态 SDF 形状、收窄 y 向渐变宽度。纯显示参数，改值即生效、不重烘焙 |
+| NeckReplicaCap | 1 | 颈带复制品压黑上限。自阴影开 + 底光时，复制品压到全黑会叠在引擎 receive_shadows 投影上成双层全黑分割线（下颚→颈上段）；调低本项只减淡这层压黑、原生投影层次透出来。光从上方/侧面时 1-neckLit 本就低于上限、行为不变，非逐方向补丁。1 = 与不设限逐位一致。纯显示参数，改值即生效、不重烘焙 |
+| NeckShadowCompensation | 1 | 颈带复制品真实阴影消费权重（阶段 2 A2）。**须配合主开关 `00_Enabled`（清底色）**：底色被清干净后，复制品采样屏幕空间阴影图、把遮挡合进光能再过阴影曲线（与身体单次着色同构，全程乘算、因子 ≤1，无 A1 除法方案的 HDR 过驱风险）。0 = 旧式合成（N·L 独立判光）。自阴影关时阴影图未绑定、C# 推 `_ShadowmapAvail=0`，两式同值。纯显示参数，改值即生效、不重烘焙 |
+
+### HairShadow（v2.0.0 起独立栏）
+
+干净底色契约：插件生效期间（General 主开关 × 逐角色 ME 开关）face renderer 的 `receiveShadows` 恒为 false——白 ramp 消不掉底色上的原生投影，必须从 renderer 层清掉，颈带由插件全权负责；主开关关闭/软关/卸载还原。开启期间 ME 面板的同名 renderer 开关会被轮询压回。**该行为没有独立配置项，不受 00_ShadowEnabled 影响。**
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| 00_ShadowEnabled | true | **发影总开关**：关 = 停止发影并释放逐角色 mask RT。不影响干净底色（见上）（原 11 号） |
+| 01_Form | ScreenSpace | **发影形态**：ScreenSpace=屏幕位移（02~05 生效，默认）/ LightSpace=**光空间正交投影**（自建 shadow map：头发渲进一张以光为视点的正交深度图，脸上像素投回光空间比深度）。LightSpace 的影贴在真实脸 mesh 上、随鼻梁眉弓起伏变形、随光向旋转，且与镜头完全解耦。SDF 面影两形态都保留。改档立即重建（原 20 号） |
+| 02_SS_ShiftX | 0.01 | ScreenSpace 专属：发影 **X 移动量程（米）**。百分比映射：光从正面扫到背面转过 3/4 行程时影到最远处，之后保持——匀速、可控（原 12 号） |
+| 03_SS_ShiftY | 0.008 | ScreenSpace 专属：发影 **Y 移动量程（米）**。保持小于 02 才有经典动画观感（影横向滑为主、竖向少量）；光上抬影下移（原 13 号） |
+| 04_SS_BaseX | 0 | ScreenSpace 专属：发影**初始 X 偏移（米）**，不依赖光向；负值反侧（原 14 号） |
+| 05_SS_BaseY | 0 | ScreenSpace 专属：发影**初始 Y 偏移（米）**，不依赖光向；负值反向（原 15 号） |
+| 06_Soft | 0.25 | **软边（原 17+21 合并为连续滑条）**：ScreenSpace 下 0=锐边（全分辨率 RT 单点采样）、>0=**2× 超采样 RT + 消费端 3×3 软核**，核间距=值×6px；LightSpace 下 PCF 块间距=值×6texel（0=单块）。RT 倍率只在跨 0 时重建，中间值即时推送 |
+| 07_LS_Resolution | 2048 | LightSpace 专属：阴影图边长。1024=低（≈8MB）/ 2048=中（≈32MB，默认）/ 4096=高（≈128MB），显存按角色数线性（原 23 号） |
+
+深度门 bias 定死为 0.005 米（C# 常量 `HairShadowBiasMeters` 每帧推送）：贴头皮碎斑 ↔ 眨眼吞影的实测折中，不暴露配置。
+已删除：`09_FaceOcclusionRestore`（全脸遮挡恢复，审美否决，shader 侧恢复分支一并清除）、`19_HairShadowParts`（部件档位固定为前发——后发入镜会把影子糊到脸侧/下颌；饰品 shader 标记收集不受影响）、`07_LS_Bias`（见上，定死常量）。发影参与渲染的部件 = 前发 + 被 ME 标记的饰品。
 
 阈值图只支持 `cf_O_face` 与 `cf_O_face_SphN`，两者共用已验证一致的 UV 布局。
 取图链只有两级：`SDF/` 下的角度帧 → 同目录 `SDF/SDF.png`。**都拿不到就整层不生效**。
@@ -282,6 +303,8 @@ contour 子帧插值（ManualContourInterpolation）解决的是**帧间时间�
 |---|---|---|
 | RenderQueue | 2360 | 叠加层渲染顺序。EC 面部材质是 2350，必须大于它 |
 | ColorMixerKey | F7 | 阴影取色器呼出键（单键，仅在捏人界面生效）。见上节"阴影取色器" |
+| FaceNoSelfCast | true | **脸不作为实时投影源**（原 10 号）：干净底色生效期间把 face renderer 的 shadowCastingMode 设 Off——屏幕空间阴影图分不清投影来源，脸自己的投影混回来是纯黑，只能从源头切除（外部投影保留）。代价：LightingEnhance 地面 proxy 缺脸部贡献。**ShadowsOnly 会隐形 renderer，禁止**。本项需开启 ConfigurationManager 的 Show advanced settings 才显示（Advanced tag） |
+| DisplayPreset | light smooth | **显示模式一键预设**：按选中档写入 05_SoftnessAngle、NeckEdgeSoftness、NeckRampScale、06_Soft 四项（各自既有生效链接管，即时生效/重建）。标定于阴影密度 0.55。档位表：<br>`light smooth`=5/0.088/0.78/0.3、`light hard`=0/0.008/0.819/0.0、`depth smooth`=0/0.1866/0.7/0.8、`depth hard`=0/0.001/0.664/0.0、`absolute smooth`=30/0.137/0.65/1 |
 
 改动 ManualContourInterpolation / ManualSDFBlurSigma 会自动废弃阈值图缓存并重新生成。
 
@@ -328,16 +351,17 @@ contour 子帧插值（ManualContourInterpolation）解决的是**帧间时间�
 
 两者独立、可同时启用、无代码耦合：
 
-- **EC_FaceNormalSmooth**（路线 A）改渲染法线，让**全头**明暗过渡柔和
+- **EC_FaceNormalSmooth** 改渲染法线，让**全头**明暗过渡柔和（它会换 mesh 实例）
 - **EC_FaceSDFShadow**（本插件）在**脸部**叠硬边阴影
 
-本插件会检测 mesh 被替换（路线 A 会换 mesh 实例）并自动重取阈值图。
+本插件会检测 mesh 被替换并自动重取阈值图。
 
 ## 已知限制
 
-- **yaw-only**：面部主体只响应光照的水平旋转。光从正上/正下打时退化。
-  标准 SDF 面部阴影皆如此（赛马娘/原神同样），非缺陷。颈带由 N·L 复制品分支
-  消费完整光向（含 pitch），不受此限（v0.9 起）。
+- **yaw-only**：面部主体只响应光照的水平旋转。极端俯仰由 pitch 渐暗门兜底
+  （进入头轴 37° 锥渐变全暗，顶/底对称）；锥外的中等俯仰无逐角度素材、
+  冻结水平帧（标准 SDF 面部阴影皆如此，非缺陷）。颈带由 N·L 复制品分支
+  消费完整光向（含 pitch），不受此限。
 - 阈值图只支持 `cf_O_face` / `cf_O_face_SphN`。眼睛/眉毛/睫毛/鼻线是独立
   renderer，不受影响。
 - 捏脸不影响阈值图：捏脸走骨骼变换（`sibFace` 的 vctPos/vctRot/vctScl），
@@ -352,3 +376,23 @@ EC 全场景（捏脸/HEdit/HPlay/ADV）。换头、换角色、切场景后自�
 定制后锁定为该卡自己的值（v0.10 起）。
 插件运行时向 ME 注入 `Rainbowing/FaceSDFOverlay` 专属属性桶（`Enable` / `ShadowColor` /
 `ThresholdBias` / `SoftnessAngle`）供逐角色软开关与调色，未装 ME 时全局开关保底。
+
+## 网络参考
+
+调研/实现过程中实际参考过的工作：
+
+**面部 SDF 阴影（整体形态参照）**
+- [赛马娘/原神风格卡通渲染分析（知乎）](https://zhuanlan.zhihu.com/p/232450616) — SDF 面部阴影的做法与 industry 惯例
+- [仿原神渲染 2.0 技术文档-角色渲染篇](https://himoqiuhan.github.io/2023/12/07/Projects-GenshinLikeRenderingInURP2-Avatar/index.html) — SDF/Ramp 章节确认了本插件的方向
+
+**头发投影（发影双形态的来源）**
+- [NPR 仿星铁角色逐物体阴影 — Garden of Recollection](https://km.stalomeow.com/p/toon-main-light-character-shadow/) — 光空间 per-object shadow map 的完整实现（形态 B 的直接参照：包围盒→View/Ortho→接收端矩阵采样）
+- [PerObjectShadowSRP](https://github.com/GavinKG/PerObjectShadowSRP) — 同思路的 SRP 开源实现
+- [Unity Manual: Shadow mapping](https://docs.unity3d.com/6000.2/Documentation/Manual/shadow-mapping.html) — 正交 shadow map 与深度比较的基础约定
+- [UWA 二次元卡通渲染——进阶技巧（基于深度的额发投影）](https://blog.uwa4d.com/archives/USparkle_Carton.html) — built-in 管线的 depth-based 刘海投影，与形态 B 同族
+- [MetaHookSv HairShadow](https://github.com/hzqst/MetaHookSv/blob/main/memory/HairShadow.md) — 屏幕空间 stencil 遮挡位图方案（调研对比项，防 acne 的顶点偏移思路被记录）
+- [MooaToon：自定义头发阴影](https://mooatoon.com/docs/Tutorial/ControlTheShapeOfShadows) — 可控形状的额发阴影（资产面片路线，因发型不可泛化而未采用）
+
+**调研覆盖但未采用的路线**（判负理由见知识库 offset-shadow-hybrid-rt.md）
+- [Unity Projector 组件](https://docs.unity3d.com/2022.3/Documentation/Manual/class-Projector.html) / [Dynamic Shadow Projector 资产](https://assetstore.unity.com/packages/tools/particles-effects/dynamic-shadow-projector-35558) — 投影器重投路线
+- [仿终末地渲染学习记录（知乎）](https://zhuanlan.zhihu.com/p/2054958065078871199) / [UE5 卡通渲染·刘海阴影（知乎）](https://zhuanlan.zhihu.com/p/1972323352069797451) — 静态阴影面片/贴花路线

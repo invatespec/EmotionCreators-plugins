@@ -7,13 +7,12 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 从用户绘制的手绘帧生成 mode 2 半浮点「受光窗口」阈值图。
+    /// 从用户绘制的手绘帧生成半浮点「受光窗口」阈值图。
     ///
-    /// 帧语义(2026-08 起):白色 = 受光,黑色 = 阴影。帧文件名纯数字,帧序
+    /// 帧语义:白色 = 受光,黑色 = 阴影。帧文件名纯数字,帧序
     /// 0=背面(sideAngle 1.0) → max=正面(sideAngle 0.0)。运行时 sideAngle ∈ [0,1],0=正面、1=背面。
     /// 每个像素被提取成一个受光窗口 [lo, hi]:sideAngle 落在窗口内 = 受光(无阴影),
-    /// 窗口外 = 阴影。这样能表达「下颚带侧光亮、正面/背面都暗」的暗→亮→暗时序,
-    /// 而不是旧实现只会表达单次翻转(导致下颚带被丢弃成恒暗)。
+    /// 窗口外 = 阴影。这样能表达「下颚带侧光亮、正面/背面都暗」的暗→亮→暗时序。
     ///
     /// 通道:R=右光 hi、G=左光 hi、B=右光 lo、A=左光 lo。左右严格镜像对称,因此只画
     /// left 一套,右光由 UV 水平镜像得到。
@@ -22,7 +21,7 @@ namespace EC_FaceSDFShadow
     {
         private const float LitCutoff = 0.5f;
 
-        /// <param name="customDir">逐角色自定义 SDF 来源目录。空 → 全局 config 目录（原行为）；
+        /// <param name="customDir">逐角色自定义 SDF 来源目录。空 → 全局 config 目录；
         /// 非空 → 作为手工帧目录（与 SDF/ 同契约）。优先级高于全局目录。</param>
         internal static Texture2D TryLoad(Mesh mesh, string customDir = null)
         {
@@ -82,7 +81,7 @@ namespace EC_FaceSDFShadow
 
         /// <summary>
         /// 从一套帧提取受光窗口 [lo, hi](sideAngle 域 0..1)。frameAngles 已按 sideAngle 升序。
-        /// 26 开启时用 contour 双场插值(相邻帧距离场零交叉),否则用 raw 帧中点插值。
+        /// ManualContourInterpolation 开启时用 contour 双场插值(相邻帧距离场零交叉),否则用 raw 帧中点插值。
         /// </summary>
         private static bool TryBuildThresholdField(Mesh mesh, float[][] frames, float[] frameAngles,
             bool[] covered, out float[] lo, out float[] hi)
@@ -436,7 +435,7 @@ namespace EC_FaceSDFShadow
             foreach (string file in Directory.GetFiles(dir, "*.png", SearchOption.TopDirectoryOnly))
             {
                 string name = Path.GetFileNameWithoutExtension(file);
-                // 纯数字文件名(2026-08-22 恢复 left 前缀前的命名契约,与 README 一致)
+                // 纯数字文件名(与 README 命名契约一致)
                 int idx;
                 if (name.Length > 0 &&
                     int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out idx))

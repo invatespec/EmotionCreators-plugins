@@ -13,8 +13,8 @@ namespace EC_FaceSDFShadow
     /// 不引用 EC_Profile 程序集，只经 ESF 读它写在角色卡上的扩展数据，
     /// 因此 Profile 未安装时自然读不到文本、静默回全局。
     ///
-    /// 之所以不再用"按角色名建目录"的约定式方案：角色名会重名；
-    /// 也不能把路径做成材质属性让用户在 ME 里填——ME 的 ShaderPropertyType 没有 String。
+    /// 不能按角色名建目录：角色名会重名；也不能把路径做成材质属性让用户在 ME 里填
+    /// ——ME 的 ShaderPropertyType 没有 String。
     /// </summary>
     internal static class PerCharaSdfResolver
     {

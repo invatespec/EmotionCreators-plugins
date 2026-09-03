@@ -17,14 +17,14 @@ shader 每次改动都要重跑一遍。
 
 ### 命令行（推荐，AI/脚本可直接跑）
 
-无头构建，不需要开 Unity 编辑器。注意 Unity 装在 D 盘：
+无头构建，不需要开 Unity 编辑器：
 
 ```bash
-"D:/Program Files/Unity/Editor/Unity.exe" \
+"path/to/your/2017.4.24f1" \
   -batchmode -quit \
-  -projectPath F:/Down/EC/AC/plugin/EC_FaceSDFShadow/UnityProject \
+  -projectPath ./plugin/EC_FaceSDFShadow/UnityProject \
   -executeMethod BuildBundle.Build \
-  -logFile F:/Down/EC/AC/plugin/EC_FaceSDFShadow/UnityProject/unity-build.log
+  -logFile ./plugin/EC_FaceSDFShadow/UnityProject/unity-build.log
 ```
 
 构建期间 **Unity 编辑器不能开着同一个项目**（会抢 Library 锁）。
@@ -34,26 +34,28 @@ shader 每次改动都要重跑一遍。
 
 Unity 菜单栏 → **Rainbowing → Build FaceSDF Bundle**
 
-### 构建后（两种方式都要做）
+### 构建后
 
-1. 把 `AssetBundles/ec_facesdf.unity3d` 复制到 `plugin/EC_FaceSDFShadow/Resources/ec_facesdf.unity3d`（覆盖）
-2. 回到 `plugin/EC_FaceSDFShadow/` 跑 `dotnet build -c Release`，bundle 作为 EmbeddedResource 打进 DLL
-3. DLL 复制到 `G:\DL\z_Games\emotioncreators\BepInEx\plugins\Rainbowing\`
+跑 `dotnet build -c Debug`（默认 Debug，带诊断日志）
+  - **`AssetBundles/` → `Resources/` 的复制已自动化**：csproj 的 `SyncShaderBundle`
+     target 在编译前按时间戳同步，命中时打印 `[FaceSDF] shader bundle 有更新`
+  - 若 shader 源码比 bundle 新（= 改了 shader 但没重打包），`WarnStaleShaderBundle`
+     会点名具体文件告警——**看到它就回上一步重打 bundle**
 
-> 忘了复制第 1 步是最容易犯的错：dotnet build 会成功、DLL 也会更新，
-> 但里面嵌的还是旧 shader，游戏里表现为"改了 shader 却毫无变化"。
-> 复制后可比对 DLL 字节数是否变化来确认。
 
 ## 验证 bundle 是否正常
 
-游戏启动后看 BepInEx 日志，应看到唯一的 shader：
+游戏启动后看 BepInEx 日志（Info 级即可），应看到**三行**：
 
 ```
 Shader loaded: Rainbowing/FaceSDFOverlay
+Shader loaded: Rainbowing/HairShadowMask
+Shader loaded: Rainbowing/HairShadowMarker
 ```
 
-> v0.7 起 bundle 只含这一个 shader。另外五个（FaceSDFBake / FaceSDFPost /
-> FaceSelfShadow×3）随阶段 1/2 烘焙与深度自遮挡 PoC 一并删除。
+> 少任何一行 = 该 shader 不在包里，对应功能会静默降级（尤其 HairShadowMask 缺失
+> 时发影完全失效，但不报错、只在 Rebuild 时告警一次；HairShadowMarker 缺失时
+> 饰品头发受影禁用）。
 
 - 缺行 → shader 没打进 bundle，检查 `BuildBundle.cs` 的 `assetNames`
 - `Failed to load shader bundle` → bundle 没复制到位或 Unity 版本不对
@@ -65,10 +67,15 @@ Shader loaded: Rainbowing/FaceSDFOverlay
 UnityProject/
   Assets/
     Shaders/
-      FaceSDFOverlay.shader     # 叠加阴影（唯一的 shader）
+      FaceSDFOverlay.shader     # 叠加阴影（接收端）
+      HairShadowMask.shader     # 发影遮罩写入端（R=有发、G=归一化眼深）
+      HairMaskBlur.shader       # 遮罩软化：R 高斯平均 + G 邻域 min（深度膨胀）
     Editor/
-      BuildBundle.cs            # 构建菜单项
+      BuildBundle.cs            # 构建入口（菜单项 + batchmode）
+      HairMaskPipelineTest.cs   # 无头对照实验（遮罩链各级质量/半影宽度）
+  verify_embed.ps1              # 校验 DLL 内嵌 bundle 与 Resources/ 一致
   AssetBundles/                 # 产出目录，gitignore
+  PipelineTest/                 # 无头实验回读产物，gitignore
 ```
 
 新增 shader 时记得在 `BuildBundle.cs` 的 `assetNames` 里追加，否则不会打进包。
