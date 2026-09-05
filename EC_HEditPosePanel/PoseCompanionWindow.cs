@@ -1,6 +1,7 @@
 using BepInEx.Configuration;
 using System.Collections.Generic;
 using System.Linq;
+using Pose;
 using UnityEngine;
 
 namespace EC_HEditPosePanel
@@ -62,6 +63,8 @@ namespace EC_HEditPosePanel
         private HandSide _guideHandSide = HandSide.Left;
         private GuideAdjustMode _guideMode = GuideAdjustMode.Curl;
         private float _guideValue;
+        private GuideCopyScope _guideCopyScope = GuideCopyScope.Single;
+        private readonly GuideCopyService _guideCopyService = new GuideCopyService();
         private Vector2 _folderScrollPosition;
         private Vector2 _poseScrollPosition;
         private string _editText = string.Empty;
@@ -157,6 +160,7 @@ namespace EC_HEditPosePanel
             _showHandTab = true;
             _guideHandSide = HandSide.Left;
             _guideMode = GuideAdjustMode.Curl;
+            _guideCopyScope = GuideCopyScope.Single;
             CloseThumbnail();
             _thumbnailPositionDirty = false;
             _selectedFolderIndex = 0;
@@ -849,14 +853,27 @@ namespace EC_HEditPosePanel
                 }
                 GUI.enabled = previous;
             }
+            // 「单个 / 整串」粒度键：两页签通用
+            GUI.enabled = previous && _poseEditContext != null && HEditPosePanelPlugin.IsInPoseEdit();
+            string scopeLabel = _guideCopyScope == GuideCopyScope.Single ? "单个" : "整串";
+            if (GUILayout.Button(scopeLabel, GUILayout.Width(52f), GUILayout.Height(20f)))
+                _guideCopyScope = _guideCopyScope == GuideCopyScope.Single ? GuideCopyScope.Chain : GuideCopyScope.Single;
+            GUI.enabled = previous;
             GUILayout.EndHorizontal();
 
+            // 展开/收拢 + 复制/反向粘贴 同排等宽（无显式宽度，button 样式自动等分）
             GUILayout.BeginHorizontal();
+            bool canResolve = previous && _poseEditContext != null && HEditPosePanelPlugin.IsInPoseEdit();
             GuideAdjustMode nextMode = _guideMode;
             if (GUILayout.Toggle(nextMode == GuideAdjustMode.Spread, "展开", GUI.skin.button))
                 nextMode = GuideAdjustMode.Spread;
             if (GUILayout.Toggle(nextMode == GuideAdjustMode.Curl, "收拢", GUI.skin.button))
                 nextMode = GuideAdjustMode.Curl;
+            GUI.enabled = canResolve;
+            if (GUILayout.Button("复制")) DoCopy();
+            GUI.enabled = canResolve && _guideCopyService.HasClipboard;
+            if (GUILayout.Button("反向粘贴")) DoReversePaste();
+            GUI.enabled = previous;
             GUILayout.EndHorizontal();
             if (nextMode != _guideMode)
             {
@@ -975,6 +992,42 @@ namespace EC_HEditPosePanel
         {
             _guideSession?.Cancel();
             _guideValue = 0f;
+        }
+
+        private GuideAdjustmentKind CopyKind()
+            => _showHandTab ? GuideAdjustmentKind.Hand : GuideAdjustmentKind.Skirt;
+
+        private OCBone FindSelectedGuideBone()
+            => _showHandTab
+                ? GuideTargetDiscovery.FindSelectedHandBone()
+                : GuideTargetDiscovery.FindSelectedSkirtBone();
+
+        private void DoCopy()
+        {
+            AbortGuidePreview();
+            PoseEditSnapshot snapshot;
+            string error;
+            if (_poseEditContext == null) { _guideStatus = "PoseCreate 上下文未初始化。"; return; }
+            if (!_poseEditContext.TryResolve(out snapshot, out error)) { _guideStatus = error; return; }
+            if (!_guideCopyService.TryCopy(
+                CopyKind(), FindSelectedGuideBone(), snapshot.Bones, _guideCopyScope, out error))
+                _guideStatus = error;
+            else
+                _guideStatus = _guideCopyScope == GuideCopyScope.Single ? "已复制当前 guide。" : "已复制整串 guide。";
+        }
+
+        private void DoReversePaste()
+        {
+            AbortGuidePreview();
+            PoseEditSnapshot snapshot;
+            string error;
+            if (_poseEditContext == null) { _guideStatus = "PoseCreate 上下文未初始化。"; return; }
+            if (!_poseEditContext.TryResolve(out snapshot, out error)) { _guideStatus = error; return; }
+            if (!_guideCopyService.TryReversePaste(
+                CopyKind(), FindSelectedGuideBone(), snapshot.Bones, _guideCopyScope, out error))
+                _guideStatus = error;
+            else
+                _guideStatus = "已反向粘贴。";
         }
 
         private static void DrawDisabledButton(string label, string tooltip)

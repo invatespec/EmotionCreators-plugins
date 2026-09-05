@@ -336,6 +336,15 @@ namespace EC_HEditPosePanel
                 .FirstOrDefault(bone => bone != null && bone.group == OIBone.BoneGroup.Skirt);
         }
 
+        internal static OCBone FindSelectedHandBone()
+        {
+            if (!Singleton<Selection>.IsInstance() || Singleton<Selection>.Instance == null) return null;
+            return Singleton<Selection>.Instance.selectCtrls
+                .OfType<OCBone>()
+                .FirstOrDefault(bone => bone != null
+                    && (bone.group == OIBone.BoneGroup.LeftHand || bone.group == OIBone.BoneGroup.RightHand));
+        }
+
         internal static bool IsDescendantOrSelf(Transform root, Transform candidate)
             => root != null && candidate != null && (candidate == root || candidate.IsChildOf(root));
 
