@@ -76,6 +76,8 @@ namespace EC_HEditPosePanel
         private bool _wasInPoseEdit;
         private bool _wasInHEdit;
         private bool _wasActiveGuideAvailable;
+        // 可用场合缓存(Update 每帧刷新);相机锁/射线清空等 Prefix 复用,避免逐帧 LINQ 分配
+        private bool _manipulatorAvailable;
         // Local+平移时锁定首个目标的局部轴，避免 IK 目标在持轴期间重定向造成方向漂移。
         private Vector3 _localAxisDir;
         private bool _localAxisDirValid;
@@ -85,7 +87,8 @@ namespace EC_HEditPosePanel
         internal static bool ShouldLockCamera()
         {
             var inst = Instance;
-            if (inst == null || !inst._windowVisible || !inst._rectSynced) return false;
+            // 离开可用场合(如回 adv)后 _windowVisible 仍残留 true 且不绘制,旧矩形不得再拦相机
+            if (inst == null || !inst._windowVisible || !inst._rectSynced || !inst._manipulatorAvailable) return false;
             if (inst._activeAxis != null) return true;
             float mx = Input.mousePosition.x;
             float my = Screen.height - Input.mousePosition.y;
@@ -300,7 +303,7 @@ namespace EC_HEditPosePanel
         {
             if (raycastResults == null || raycastResults.Count == 0) return;
             var inst = Instance;
-            if (inst == null || !inst._windowVisible || inst._companionWindow == null) return;
+            if (inst == null || !inst._windowVisible || !inst._manipulatorAvailable || inst._companionWindow == null) return;
             float mx = Input.mousePosition.x;
             float my = Screen.height - Input.mousePosition.y;
             if (!inst._companionWindow.ContainsMouse(new Vector2(mx, my))) return;
@@ -376,6 +379,7 @@ namespace EC_HEditPosePanel
             _wasActiveGuideAvailable = activeGuideAvailable;
 
             bool canManipulate = inPose || inHEdit || activeGuideAvailable;
+            _manipulatorAvailable = canManipulate;
 
             if (Input.GetKeyDown(_cfgToggleKey.Value))
             {
