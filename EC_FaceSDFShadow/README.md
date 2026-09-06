@@ -23,7 +23,10 @@
   脸 mesh、随光向与镜头解耦）+ 多角色逐主体 RT/矩阵隔离。
 - **v1.5.0~v1.5.1**：饰品头发参与发影（ME 哑 shader 标记，材质级玩家意志随卡
   持久化）；深度门单侧软化窗（眨眼吞影修复）。
-- **v2.0.0（当前）**：配置大改——发影项移入独立 **HairShadow** 栏重排
+- **v2.1.0（当前）**：形态 A 深度门掠射感知——消费端按 NdV 把容差在侧脸轮廓带
+  自动收紧到正面区约 1/30，拒掉被脸挡住的远侧贴脸侧发穿透影；正面区容差默认
+  0.005 米（Debug 构建经 Debug 组 `SS_DepthTol` 可调，Release 固定）。
+- **v2.0.0**：配置大改——发影项移入独立 **HairShadow** 栏重排
   （`00_ShadowEnabled` 默认开 / `01_Form` 枚举 ScreenSpace/LightSpace /
   `02~05_SS_*` 屏幕空间四件 / `06_Soft` 合并连续滑条 / `07_LS_Resolution`）；
   删 `09_FaceOcclusionRestore`（审美否决）、`19_HairShadowParts`（固定前发）、
@@ -134,7 +137,8 @@ v0.6.0 起依赖前置插件（游戏通常已装）：
 诊断与实验功能（阈值图/材质/BlendShape 导出等快捷键）用 `#if DEBUG` 隔离：
 
 - **Release 构建**（`dotnet build -c Release`）：剔除诊断功能，ConfigurationManager
-  面板更干净，给普通用户。诊断快捷键（Debug 组）不注册。
+  面板更干净，给普通用户。诊断快捷键（Debug 组）不注册；Debug 组调参项
+  （`SS_DepthTol`）不注册、按内置常量生效。
 - **Debug 构建**（`dotnet build -c Debug`）：保留全部诊断功能，开发排查用。
 
 日常开发验证用 Debug，发布给用户用 Release。
@@ -287,12 +291,12 @@ contour 子帧插值（ManualContourInterpolation）解决的是**帧间时间�
 ### BlendCompensation（表情 UV 补偿）
 
 眨眼/眯眼/闭单眼等表情会把皮肤连同 SDF 阈值图案一起拉动，本组按 blendshape 权重驱动
-5 分区 affine UV 偏移把图案"钉"回皮肤。v0.10 起默认开启（群主实测认可）。
+5 分区 affine UV 偏移把图案"钉"回皮肤。v0.10 起默认开启。
 
 | 键 | 默认 | 说明 |
 |---|---|---|
 | BlendCompensation | true | 主开关。开启后颊/眼分区始终参与补偿 |
-| BlendCompMouth | true | 嘴区 affine 也参与（群主实测认可默认开）。离线拟合显示嘴区 affine 修正有限，此开关保留作对比/回退 |
+| BlendCompMouth | true | 嘴区 affine 也参与（默认开）。离线拟合显示嘴区 affine 修正有限，此开关保留作对比/回退 |
 | DefClBase | 0 | def_cl（闭眼）blendshape 的基线权重，先扣再累加。0=中性姿势全睁眼（与离线拟合一致）；若阈值图是按游戏"睁眼 1"姿势（def_cl=23）画的、中立面有静态偏移，填 23 归零 |
 | Gain | 0.6 | 补偿幅度乘子。0.6 为 2026-08-16 Gram 投影修正后的实测最优（1.0=完整离线拟合幅度、屏幕上略过冲）。图案与皮肤反向移动调低，仍拖拽则向 1 调高 |
 | LiveMode | true | 运行时实测补偿：每帧 BakeMesh 对照"无表情参照"（面部无表情时自动捕获，约 10 帧稳定；眼/嘴 def 插值通道豁免，默认闭嘴姿势也算无表情）。对任意头 mesh 与任意驱动源（blendshape、FBSAssist 颊动画、骨骼、第三方）都正确。参照建立前由离线表兜底（眨眼/单闭眼离线表已足够） |

@@ -102,6 +102,13 @@ namespace EC_FaceSDFShadow
         // 光空间形态的 RT 边长(07):档位越高边缘越细腻,显存代价平方增长。
         internal static ConfigEntry<int> HairShadowRes;
 
+#if DEBUG
+        // 深度门正面区容差(米,Debug 节):ScreenSpace 形态单侧门放行带;掠射区
+        // (侧脸轮廓带)由 shader 按 ~1/30 比例收紧拒穿透影。下限受 RT 半浮点
+        // 深度量化噪声(~1mm)约束,低于它开始咬合法贴脸影。
+        internal static ConfigEntry<float> HairShadowDepthTol;
+#endif
+
         // 表情 UV 补偿（分区 affine，见 FaceBlendCompensation）
         internal static ConfigEntry<bool> BlendCompensation;
         internal static ConfigEntry<bool> BlendCompMouth;
@@ -403,6 +410,19 @@ namespace EC_FaceSDFShadow
                     "LightSpace form: shadow map edge length. VRAM is about " +
                     "8/32/128 MB per character at 1024/2048/4096.",
                     new AcceptableValueList<int>(1024, 2048, 4096)));
+
+#if DEBUG
+            // Debug 节调参项:Release 不注册,推送侧固定用 FaceOverlayCore.HairShadowDepthTolDefault
+            HairShadowDepthTol = Config.Bind(
+                "Debug", "SS_DepthTol", FaceOverlayCore.HairShadowDepthTolDefault,
+                new ConfigDescription(
+                    "ScreenSpace hair shadow: depth-gate tolerance in meters " +
+                    "for the frontal region. Hair whose original-position " +
+                    "depth sits deeper than the face pixel by more than this " +
+                    "casts no shadow. The grazing silhouette band uses a " +
+                    "proportionally tightened tolerance.",
+                    new AcceptableValueRange<float>(0.001f, 0.05f)));
+#endif
 
             FaceNoSelfCast = Config.Bind(
                 "Advanced", "FaceNoSelfCast", true,

@@ -98,6 +98,8 @@ Shader "Rainbowing/FaceSDFOverlay"
             float _HairShadowWeight;
             // 06:软边(0..1)。形态 A 0=单 tap锐边/>0=3×3 软核(间距 v×6px,配 2× 超采样 RT)
             float _HairShadowSoft;
+            // 深度门正面区容差(米,Debug 节 SS_DepthTol);掠射区按比例收紧(见 HairShadowSample)
+            float _HairShadowTol;
             // 01:发影形态(0=屏幕位移/1=光空间正交投影)。1 时 RT 内容是光空间
             // 深度图,采样坐标改由 worldPos 投影得到,与镜头解耦。
             float _HairShadowForm;
@@ -220,7 +222,7 @@ Shader "Rainbowing/FaceSDFOverlay"
             // 百分比平移后渲进 RT),本层在像素自身位置单点采样——无偏移采样,
             // 出屏截断/深度窗错配两族旧失败结构性不存在。深度门为单侧门(判 RT
             // 编码的"原位置"深度,拒脸后头发的穿透影)。
-            float HairShadowSample(float2 suv, float3 worldPos)
+            float HairShadowSample(float2 suv, float3 worldPos, float3 worldNormal)
             {
                 float eye = -(mul(UNITY_MATRIX_V, float4(worldPos, 1.0))).z;
                 float2 rg;
@@ -256,9 +258,15 @@ Shader "Rainbowing/FaceSDFOverlay"
                 // 坑:不能用双侧窗——多层头发共址时 coverage 是并集、值是最前层的,
                 // 下界会把"最前层出窗"的像素整格挖掉(合法影被拖累),容差小值时
                 // 表现为影突变/U 形缩放。
-                const float HAIR_TOL = 0.03;
-                float outside = hairEye - eye - HAIR_TOL;
-                float gate = 1.0 - smoothstep(0.0, HAIR_TOL, outside);
+                // 正面区容差(米,Debug 节 SS_DepthTol)。掠射感知:轮廓带(NdV→0)视线掠过
+                // 脸颊后到贴脸头发的深度增长仅几毫米,大容差必放行穿透影→按 ~1/30 收紧;
+                // 渐隐带宽随 tol 缩放,否则收紧段只压淡不拒掉。ndv≥0.6 用全量保贴脸合法影。
+                float tolFront = max(_HairShadowTol, 0.001);
+                float3 vDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
+                float ndv = saturate(dot(normalize(worldNormal), vDir));
+                float tol = max(tolFront * lerp(0.033, 1.0, smoothstep(0.30, 0.60, ndv)), 0.0005);
+                float outside = hairEye - eye - tol;
+                float gate = 1.0 - smoothstep(0.0, tol, outside);
                 return rg.g * gate;
             }
 
@@ -415,7 +423,7 @@ Shader "Rainbowing/FaceSDFOverlay"
                     // 形态 A=屏幕位移单点+单侧门;形态 B=光空间深度门+PCF
                     float tap = (_HairShadowForm > 0.5)
                         ? HairShadowSampleLight(i.worldPos)
-                        : HairShadowSample(i.shadowCoord.xy / i.shadowCoord.w, i.worldPos);
+                        : HairShadowSample(i.shadowCoord.xy / i.shadowCoord.w, i.worldPos, i.worldNormal);
                     hairAmount = _HairShadowWeight * tap;
                     // 颈带排除防双算:复制品消费的引擎阴影图里本来就含头发投影
                     hairAmount *= 1.0 - neckBand;

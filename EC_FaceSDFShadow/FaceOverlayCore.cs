@@ -133,6 +133,9 @@ namespace EC_FaceSDFShadow
         /// <summary>光空间深度门 bias(米):贴头皮斑驳 ↔ 眨眼吞影的实测折中值,定死不暴露。</summary>
         internal const float HairShadowBiasMeters = 0.005f;
 
+        /// <summary>深度门正面区容差默认值(米):实测调定值;Debug 构建经 Debug/SS_DepthTol 可调,Release 固定用本值。</summary>
+        internal const float HairShadowDepthTolDefault = 0.005f;
+
         // 光空间矩阵现在逐角色写入各 overlay/mask 材质(多角色),不再 SetGlobal。
         internal struct LightSpaceFrame
         {
@@ -169,6 +172,12 @@ namespace EC_FaceSDFShadow
                 FaceSDFShadowPlugin.HairShadowBaseX.Value);
             Shader.SetGlobalFloat(ShaderIDs.HairShadowBaseY,
                 FaceSDFShadowPlugin.HairShadowBaseY.Value);
+#if DEBUG
+            Shader.SetGlobalFloat(ShaderIDs.HairShadowTol,
+                FaceSDFShadowPlugin.HairShadowDepthTol.Value);
+#else
+            Shader.SetGlobalFloat(ShaderIDs.HairShadowTol, HairShadowDepthTolDefault);
+#endif
 
             // forward 是光行进方向,"指向光源"取负(与 _WorldSpaceLightPos0 同语义)
             Vector3 lightDir = _hairLight != null
@@ -1138,6 +1147,8 @@ namespace EC_FaceSDFShadow
         // 发影初始 X/Y 偏移(04/05,米,不依赖光向的基础位移)
         internal static readonly int HairShadowBaseX = Shader.PropertyToID("_HairShadowBaseX");
         internal static readonly int HairShadowBaseY = Shader.PropertyToID("_HairShadowBaseY");
+        // 深度门正面区容差(米,Debug 节 SS_DepthTol,掠射区收紧比例在 shader 内)
+        internal static readonly int HairShadowTol = Shader.PropertyToID("_HairShadowTol");
         // 发影形态(01,0=屏幕位移/1=光空间)、软边值源(06,uniform 名 _HairShadowBlur)
         // 与光空间深度门 bias(定死常量,无配置项)
         internal static readonly int HairShadowForm = Shader.PropertyToID("_HairShadowForm");
