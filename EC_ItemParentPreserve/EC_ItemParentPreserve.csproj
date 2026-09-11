@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net46</TargetFramework>
+        <AssemblyName>EC_ItemParentPreserve</AssemblyName>
+        <OutputType>Library</OutputType>
+        <RootNamespace>EC_ItemParentPreserve</RootNamespace>
+        <LangVersion>9.0</LangVersion>
+        <Nullable>disable</Nullable>
+        <OutputPath>../../bin/BepInEx/plugins/EC_ItemParentPreserve/</OutputPath>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+        <Deterministic>false</Deterministic>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="IllusionLibs.BepInEx" Version="5.4.22" />
+        <PackageReference Include="IllusionLibs.BepInEx.Harmony" Version="2.9.0" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.Assembly-CSharp" Version="2019.6.6.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.IL" Version="2019.6.6.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.UniRx" Version="2019.6.6.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.TextMeshPro" Version="2019.6.6.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.CoreModule" Version="2017.4.24.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.UI" Version="2017.4.24.4" />
+    </ItemGroup>
+
+    <!-- 引用 DLL 游戏目录已有,不复制到输出 -->
+    <Target Name="SkipAllRefs" AfterTargets="ResolveReferences">
+        <ItemGroup>
+            <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" />
+        </ItemGroup>
+    </Target>
+</Project>
