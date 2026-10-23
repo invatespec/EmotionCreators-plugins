@@ -1,0 +1,55 @@
+{
+  "format": "ec-scene-review-report",
+  "version": 1,
+  "reportId": "r2",
+  "supersedesReportId": "r1",
+  "source": {
+    "bundleId": "fixture-1",
+    "manifestSha256": "ee02d3c145c6d694232232597dd83e7e9b30ef2500facc40a5f5dec78778a25a"
+  },
+  "summary": "补充核对后撤销示例问题。",
+  "coverage": {
+    "reviewed": [
+      {
+        "fileId": "scene",
+        "kind": "json-pointer",
+        "pointer": "/nodes/0/part/cuts/0/textBoxes/1/layouts/0/scriptBlocks/0/raw"
+      }
+    ],
+    "excluded": [],
+    "limitations": [
+      "没有执行游戏。"
+    ]
+  },
+  "findings": [
+    {
+      "id": "f1",
+      "status": "withdrawn",
+      "severity": "minor",
+      "certainty": "conditional",
+      "title": "待核对的脚本前提",
+      "locations": [
+        {
+          "fileId": "scene",
+          "kind": "json-pointer",
+          "pointer": "/nodes/0/part/cuts/0/textBoxes/1/layouts/0/scriptBlocks/0/raw"
+        }
+      ],
+      "trigger": "到达本 CUT 时",
+      "evidence": [
+        {
+          "reference": {
+            "fileId": "scene",
+            "kind": "json-pointer",
+            "pointer": "/nodes/0/part/cuts/0/textBoxes/1/layouts/0/scriptBlocks/0/raw"
+          },
+          "explanation": "脚本读取外部文件。",
+          "quote": "<load-script file=\"a.xml\"/>"
+        }
+      ],
+      "impact": "需核对依赖状态。",
+      "recommendation": "检查资料清单。",
+      "revisionReason": "原疑点来自未读依赖，现已核对。"
+    }
+  ]
+}

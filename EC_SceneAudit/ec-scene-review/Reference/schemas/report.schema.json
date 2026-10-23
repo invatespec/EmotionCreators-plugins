@@ -1,0 +1,197 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ec-scene-audit.invalid/schema/report.json",
+  "type": "object",
+  "properties": {
+    "format": {
+      "const": "ec-scene-review-report"
+    },
+    "version": {
+      "const": 1
+    },
+    "reportId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "supersedesReportId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source": {
+      "$ref": "https://ec-scene-audit.invalid/schema/common.json#/definitions/source"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "reviewed": {
+          "type": "array",
+          "items": {
+            "$ref": "https://ec-scene-audit.invalid/schema/common.json#/definitions/reference"
+          }
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reference": {
+                "$ref": "https://ec-scene-audit.invalid/schema/common.json#/definitions/reference"
+              }
+            },
+            "required": [
+              "scope",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "reviewed",
+        "excluded",
+        "limitations"
+      ],
+      "additionalProperties": false
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "active",
+              "withdrawn"
+            ]
+          },
+          "severity": {
+            "enum": [
+              "blocker",
+              "major",
+              "minor",
+              "info"
+            ]
+          },
+          "certainty": {
+            "enum": [
+              "confirmed",
+              "conditional",
+              "unknown"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "locations": {
+            "type": "array",
+            "items": {
+              "$ref": "https://ec-scene-audit.invalid/schema/common.json#/definitions/reference"
+            },
+            "minItems": 1
+          },
+          "trigger": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reference": {
+                  "$ref": "https://ec-scene-audit.invalid/schema/common.json#/definitions/reference"
+                },
+                "explanation": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "quote": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reference",
+                "explanation"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "impact": {
+            "type": "string",
+            "minLength": 1
+          },
+          "recommendation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revisionReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "replacesFindingIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "severity",
+          "certainty",
+          "title",
+          "locations",
+          "trigger",
+          "evidence",
+          "impact",
+          "recommendation",
+          "revisionReason"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "format",
+    "version",
+    "reportId",
+    "supersedesReportId",
+    "source",
+    "summary",
+    "coverage",
+    "findings"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,2 @@
+# 证据样例按清单 sha256 逐字节核验，换行转换会改哈希。
+EC_SceneAudit/ec-scene-review/Reference/examples/** -text

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="NodePatchRegression.cs" />
+    <Compile Include="../Export/*.cs" Exclude="../Export/SceneSnapshotBuilder.cs" />
+    <Compile Include="../Repair/RepairInputException.cs" />
+    <Compile Include="../Repair/RepairJson.cs" />
+    <Compile Include="../Repair/RepairPlanModels.cs" />
+    <Compile Include="../Repair/RepairPlanReader.cs" />
+    <Compile Include="../Repair/RepairLayoutPointer.cs" />
+    <Compile Include="../Repair/SceneSnapshotJson.cs" />
+    <Compile Include="../Repair/RepairBundleReader.cs" />
+    <Compile Include="../Repair/RepairTargetSink.cs" />
+    <Compile Include="../Repair/NodePatchModels.cs" />
+    <Compile Include="../Repair/NodePatchReader.cs" />
+    <Compile Include="../Repair/NodePatchMemoryModels.cs" />
+    <Compile Include="../Repair/NodePatchPreflight.cs" />
+    <Compile Include="../Repair/NodePatchEngine.cs" />
+    <Compile Include="../Repair/NodePatchVerifier.cs" />
+  </ItemGroup>
+</Project>

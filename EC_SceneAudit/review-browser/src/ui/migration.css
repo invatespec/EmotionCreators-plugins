@@ -1,0 +1,18 @@
+.migration-dialog { width:min(800px,94vw); }
+/* 预览与历史记录可达数千像素；固定头尾，只让内容区滚动，否则确认按钮会落到视口外。 */
+.migration-dialog[open] { display:flex; flex-direction:column; overflow:hidden; }
+.migration-dialog header { flex-shrink:0; background:#f8fafb; padding:10px 0; }
+.migration-content { flex:1 1 auto; min-height:0; overflow:auto; }
+.migration-dialog>label, .migration-dialog>#migration-status, .migration-dialog>#migration-confirm { flex-shrink:0; }
+.migration-dialog h2 { font-size:20px; }
+.migration-dialog button { white-space:normal; }
+.migration-dialog input[type=file] { min-width:0; }
+.migration-content, #migration-status { overflow-wrap:anywhere; }
+.migration-counts { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 20px; }
+.migration-counts dd { margin:0; font-variant-numeric:tabular-nums; }
+.migration-record { border-top:1px solid #c5d1d8; padding:14px 0; }
+.migration-detail { margin:10px 0; }
+.migration-detail summary { cursor:pointer; }
+.migration-detail pre { white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.6 monospace; margin:8px 0; padding:10px; background:#edf1f3; max-height:340px; overflow:auto; }
+.migration-dialog #migration-confirm { margin-top:16px; }
+.project-entry-actions { flex-wrap:wrap; }

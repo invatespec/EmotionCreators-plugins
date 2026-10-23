@@ -1,0 +1,40 @@
+.author-dialog { width:min(820px,94vw); height:min(820px,92vh); max-height:92vh; box-sizing:border-box; overflow:hidden; border:1px solid #b8c8d3; border-radius:14px; padding:0; color:#23323b; background:#f8fafb; }
+.author-dialog[open] { display:flex; flex-direction:column; }
+.author-dialog::backdrop { background:#20303c77; }
+.author-dialog header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:20px 22px 12px; flex-shrink:0; background:#f8fafb; }
+.author-dialog header p { margin:6px 0 0; font-size:13px; }
+.author-window-actions { display:flex; gap:8px; flex-shrink:0; }
+.author-dialog .author-window-actions button { font-size:13px; padding:7px 10px; }
+.author-dialog h2 { margin:0; font-size:22px; }
+.author-dialog h3 { font-size:16px; }
+/* 等宽三列 + 按钮内容居中,规避默认行内基线造成的页签不齐;上下留白一致,不贴上方分隔线。 */
+.author-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; padding:12px 22px; border-bottom:1px solid #dce4e9; flex-shrink:0; }
+.author-tabs button { display:flex; align-items:center; justify-content:center; min-height:38px; }
+.author-tabs button[aria-pressed=true] { background:#285f50; color:#fff; border-color:#285f50; }
+.author-scroll { overflow:auto; min-height:0; flex:1; padding:16px 22px; }
+.author-dialog label { display:grid; gap:6px; font-size:13px; }
+/* 胶囊控件自带外框,排除其内部 input,避免出现双层边框。 */
+.author-dialog textarea, .author-dialog input:not([type=checkbox]):not(.chip-input), .author-dialog select { width:100%; min-width:0; box-sizing:border-box; border:1px solid #cad5de; border-radius:6px; padding:8px; font:inherit; }
+.author-dialog textarea { resize:vertical; }
+.author-scope { display:grid; gap:14px; }
+/* 窄面板下自动降为单列,避免 4 个标注框相互挤压。 */
+.author-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-bottom:12px; }
+.author-field:last-child { grid-column:1/-1; }
+.author-field { display:grid; align-content:start; gap:6px; min-width:0; }
+.author-dialog .author-field-heading { display:flex; gap:8px; align-items:center; }
+.author-memberships { display:grid; gap:6px; min-width:0; }
+#author-group-chips { display:flex; flex-wrap:wrap; gap:4px; }
+.author-group-chip { display:flex; align-items:center; gap:4px; background:#e7f3ef; border-radius:4px; padding:2px 5px; font-size:12px; overflow-wrap:anywhere; max-width:100%; }
+.author-group-chip button { padding:0 4px; flex-shrink:0; }
+.author-create-group { display:flex; gap:6px; }
+.author-create-group button { flex-shrink:0; }
+.author-group-notes { display:grid; gap:10px; padding:14px 0; border-top:1px solid #dce4e9; }
+.author-group-notes h3, .author-group-notes p { margin:0; }
+.author-entry { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 0; border-bottom:1px solid #e4eaee; font-size:13px; overflow-wrap:anywhere; }
+.author-entry p { width:100%; margin:0; white-space:pre-wrap; overflow-wrap:anywhere; max-height:140px; overflow:auto; }
+.author-dialog footer { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 22px; border-top:1px solid #dce4e9; flex-shrink:0; }
+.author-import { max-width:240px; }
+#author-message { width:100%; margin:0; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; color:#375f68; }
+.author-minimized { display:grid; place-items:center; flex:0 0 34px; width:34px; height:34px; margin-left:auto; padding:6px; pointer-events:auto; border-color:#6f9c92; background:#e7f3ef; }
+.annotation-badge { position:absolute; left:-8px; top:-12px; max-width:155px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:2px 6px; border:1px solid #6f9c92; background:#e7f3ef; color:#285f50; border-radius:5px; font-size:11px; z-index:2; }
+@media(max-width:760px) { .top-actions { flex-wrap:wrap; justify-content:flex-end; } .author-dialog header { padding:14px 14px 10px; gap:8px; } .author-tabs { padding:10px 14px; gap:4px; } .author-tabs button { padding:7px; } .author-scroll { padding:14px; } .author-dialog footer { padding:10px 14px; } .author-fields { grid-template-columns:1fr; } .author-window-actions { gap:4px; } .author-window-actions button { padding:6px; } .author-dialog h2 { font-size:19px; } .author-import { max-width:100%; } }

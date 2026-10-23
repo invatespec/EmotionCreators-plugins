@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <SceneAuditParentBuildProps>$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))</SceneAuditParentBuildProps>
+  </PropertyGroup>
+  <Import Project="$(SceneAuditParentBuildProps)" Condition="'$(SceneAuditParentBuildProps)' != ''" />
+  <PropertyGroup>
+    <!-- 必须在 SDK 推导还原与编译路径前隔离，避免同目录套件共用缓存和 apphost。 -->
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin/$(MSBuildProjectName)/</BaseOutputPath>
+  </PropertyGroup>
+</Project>

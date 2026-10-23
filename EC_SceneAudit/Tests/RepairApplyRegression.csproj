@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="RepairApplyRegression.cs" />
+    <Compile Include="../Export/*.cs" Exclude="../Export/SceneSnapshotBuilder.cs" />
+    <Compile Include="../Repair/RepairInputException.cs" />
+    <Compile Include="../Repair/RepairJson.cs" />
+    <Compile Include="../Repair/RepairLayoutPointer.cs" />
+    <Compile Include="../Repair/RepairPlanModels.cs" />
+    <Compile Include="../Repair/RepairPlanReader.cs" />
+    <Compile Include="../Repair/SceneSnapshotJson.cs" />
+    <Compile Include="../Repair/RepairBundleReader.cs" />
+    <Compile Include="../Repair/RepairPreflightModels.cs" />
+    <Compile Include="../Repair/RepairPreflight.cs" />
+    <Compile Include="../Repair/RepairTargetSink.cs" />
+    <Compile Include="../Repair/RepairPointerOwnership.cs" />
+    <Compile Include="../Repair/RepairWindowGeometry.cs" />
+    <Compile Include="../Repair/RepairPathText.cs" />
+    <Compile Include="../Repair/RepairApplyModels.cs" />
+    <Compile Include="../Repair/RepairMemoryModels.cs" />
+    <Compile Include="../Repair/RepairMemoryCapture.cs" />
+    <Compile Include="../Repair/RepairMemoryRestore.cs" />
+    <Compile Include="../Repair/RepairApplyTransaction.cs" />
+    <Compile Include="../Repair/RepairApplyEngine.cs" />
+    <Compile Include="../Repair/RepairVerifier.cs" />
+  </ItemGroup>
+</Project>

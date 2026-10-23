@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="AiSummaryBuilderRegression.cs" />
+    <Compile Include="../Export/AiSummaryBuilder.cs" />
+    <Compile Include="../Export/AiSummaryModels.cs" />
+    <Compile Include="../Export/SceneSnapshotModels.cs" />
+    <Compile Include="../Export/VariableModScanner.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Scene 审查 · 节点池</title><link rel="icon" href="data:,">
+  <link rel="stylesheet" href="app.css"><script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span>S</span><strong>Scene 审查</strong><span id="scene-title" class="muted scene-name">尚未选择资料</span></div>
+    <div class="top-actions"><span id="source-summary" class="muted"></span><button id="editor-open" type="button">编辑与补丁</button><button id="import-open" type="button">资料与报告</button></div>
+  </header>
+  <main id="workspace">
+    <aside id="issues" aria-label="审查问题面板">
+      <div class="side-header"><button id="back" hidden type="button">← 返回列表</button><h1 id="side-title">审查问题</h1><button id="collapse" type="button" aria-label="收起问题面板">‹</button></div>
+      <section id="list-page"><div class="list-description"><span id="problem-count"></span><p>先选问题，再看它发生的位置</p></div><div id="filter-label" hidden></div><div id="problem-list"></div><details id="withdrawn"><summary>已撤销的问题</summary><div id="withdrawn-list"></div></details></section>
+      <section id="detail-page" hidden></section>
+      <div class="side-foot">颜色表示影响程度，确定程度单独说明。</div>
+      <div id="issues-resize" aria-hidden="true"></div>
+    </aside>
+    <section id="stage" aria-label="节点池">
+      <div class="canvas-toolbar"><button id="expand" hidden type="button">审查问题</button><div><strong>节点池</strong><span id="selection-label" class="muted"></span></div>
+        <div class="canvas-navigation"><div id="part-search-control" class="part-search-control"><input id="part-search" type="search" placeholder="搜索 Part 名称" aria-label="搜索 Part 名称" role="combobox" aria-autocomplete="list" aria-controls="part-search-results" aria-expanded="false" autocomplete="off"><div id="part-search-results" role="listbox" hidden></div></div><div class="gesture-modes" aria-label="画布操作模式"><button id="mode-select" type="button" aria-label="选择" title="选择" aria-pressed="true"></button><button id="mode-pan" type="button" aria-label="平移" title="平移" aria-pressed="false"></button></div></div>
+        <div class="canvas-actions">
+          <button id="edge-visibility" type="button" aria-label="连线显示：显示全部连线" title="显示全部连线"></button>
+          <button id="fit" type="button" aria-label="查看全图" title="查看全图"></button>
+          <details id="layout-menu" class="toolbar-menu"><summary>排列</summary><div class="toolbar-menu-body">
+            <label>对齐基准<select id="align-anchor"><option value="">选区边界</option></select></label>
+            <div class="selection-actions" aria-label="选中节点对齐"><button id="align-left" disabled type="button" aria-label="左对齐" title="左对齐"></button><button id="align-hcenter" disabled type="button" aria-label="水平居中" title="水平居中"></button><button id="align-right" disabled type="button" aria-label="右对齐" title="右对齐"></button><button id="align-top" disabled type="button" aria-label="顶部对齐" title="顶部对齐"></button><button id="align-vcenter" disabled type="button" aria-label="垂直居中" title="垂直居中"></button><button id="align-bottom" disabled type="button" aria-label="底部对齐" title="底部对齐"></button></div>
+            <label>节点间隔<input id="layout-gap" type="number" min="0" max="100000" step="1" placeholder="自动" aria-label="节点边缘间隔"></label>
+            <div class="selection-actions"><button id="distribute-h" disabled type="button" title="水平等间隔">水平等间隔</button><button id="distribute-v" disabled type="button" title="垂直等间隔">垂直等间隔</button></div>
+            <label class="snap-setting"><input id="snap-enabled" type="checkbox" checked>对齐吸附</label>
+            <button id="arrange" type="button">自动排列</button><button id="game-layout" disabled type="button">恢复游戏布局</button><button id="reset-route" disabled type="button">恢复自动连线路线</button>
+          </div></details>
+          <button id="undo" disabled type="button" aria-label="撤销" title="撤销"></button><button id="redo" disabled type="button" aria-label="重做" title="重做"></button><button id="save" type="button" aria-label="保存草稿" title="保存草稿"></button>
+        </div></div>
+      <div id="source-warning" role="alert" hidden>报告未通过核验，问题定位与标记已停用。点击「资料与报告」查看原因。</div>
+      <div id="viewport" aria-label="可缩放节点画布">
+        <div id="world"><div id="canvas-frame" hidden></div><div id="regions"></div><svg id="edges" xmlns="http://www.w3.org/2000/svg" aria-label="节点连接"></svg><div id="selection-frame" hidden><span>拖动所选</span></div><div id="nodes"></div><svg id="edge-handles" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg></div>
+        <div id="marquee" hidden></div>
+      </div>
+      <div id="empty-selection">选择节点，展开 CUT 预览<br><span>或从左侧问题自动定位</span></div>
+      <section id="cut-panel" hidden aria-label="CUT 预览">
+        <header><div><strong id="part-name"></strong><span class="muted">CUT 预览 · 序号从 1 开始</span></div><button id="close-cuts" type="button" aria-label="关闭 CUT 预览">×</button></header>
+        <div id="before-context" class="context-stack before-stack"></div>
+        <div class="range-row before-range"><label>前面 <select id="before-range"></select> 个 CUT</label><button id="save-ranges" type="button">设为默认</button></div>
+        <div id="current-cut"></div>
+        <div class="range-row after-range"><label>后面 <select id="after-range"></select> 个 CUT</label><span id="range-status" class="muted"></span></div>
+        <div id="after-context" class="context-stack after-stack"></div>
+        <footer><label>CUT <input id="cut-number" type="number" min="1" aria-label="当前 CUT 序号"> / <span id="cut-total"></span></label><span class="muted">点击卡片查看完整文本</span></footer>
+        <input id="cut-slider" type="range" min="0" step="1" aria-label="当前 Part 的 CUT 滑条">
+      </section>
+      <div class="canvas-bottom"><div class="legend"><span class="normal-line"></span>普通连接 <span class="script-line"></span>脚本跳转 <span class="selection-dot"></span>当前选中</div><div class="zoom"><button id="zoom-out" type="button" aria-label="缩小">−</button><output id="zoom-value">100%</output><button id="zoom-in" type="button" aria-label="放大">+</button></div></div>
+    </section>
+  </main>
+  <footer class="app-footer"><div class="save-state"><span id="draft-state">尚无草稿</span><span id="project-save-state">项目尚未保存</span><span id="patch-export-state">补丁尚未导出</span></div><span id="status" role="status" aria-live="polite">选择 F8 资料包开始阅读</span></footer>
+  <dialog id="import-dialog" aria-labelledby="import-title">
+    <header><h2 id="import-title">打开本地资料与报告</h2><button id="import-close" type="button" aria-label="关闭导入窗口">×</button></header>
+    <p>选择直接包含 bundle.json 的 F8 资料包文件夹。报告可以稍后添加；文件只在本机读取。</p>
+    <div class="file-row"><span>资料包目录</span><button id="bundle-pick" type="button">选择文件夹</button><input id="bundle-files" type="file" webkitdirectory multiple hidden></div>
+    <div class="file-row"><span>当前报告 JSON(可选)</span><button id="report-pick" type="button">选择文件</button><input id="report-file" type="file" accept=".json,application/json" hidden></div>
+    <div class="file-row"><span>前版报告 JSON(验证修订时使用)</span><button id="previous-pick" type="button">选择文件</button><input id="previous-file" type="file" accept=".json,application/json" hidden></div>
+    <div class="import-actions"><button id="reload-files" type="button">重新读取所选文件</button><button id="clear-previous" type="button">清除前版</button><button id="clear-report" type="button">清除报告</button></div>
+    <p id="load-summary" role="status">尚未选择资料</p><ul id="load-diagnostics"></ul>
+    <details id="report-overview" hidden><summary>报告范围与修订</summary><pre id="report-overview-text"></pre></details>
+  </dialog>
+  <dialog id="fulltext"><header><div><span class="muted">完整文本</span><h2 id="fulltext-title"></h2></div><button id="close-fulltext" type="button" aria-label="关闭完整文本">×</button></header><div id="fulltext-content"></div></dialog>
+</body>
+</html>

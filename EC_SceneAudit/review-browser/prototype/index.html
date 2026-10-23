@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scene 审查 · 交互原型</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <script src="demo-data.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="./index.html"><span class="brand-mark" aria-hidden="true">S</span>Scene 审查</a>
+    <span class="workspace-name">雨后小镇 <span class="subtle">/ 界面演示</span></span>
+    <label class="demo-switch">演示状态
+      <select id="demo-mode">
+        <option value="report">资料 + 审查报告</option>
+        <option value="scene">仅有资料</option>
+        <option value="mismatch">报告与资料不匹配</option>
+      </select>
+    </label>
+  </header>
+  <div class="prototype-note"><span class="tag">交互原型</span>全部问题、对白和流程均为演示数据，不是你的 Scene 审查结论。 <a href="node-pool/">打开节点池新版 →</a></div>
+  <main>
+    <div class="workspace-heading">
+      <div><p class="eyebrow">SCENE REVIEW</p><h1>从问题，读到前后经过</h1><p id="workspace-description" class="subtle">选中一条问题，沿相关对白和路线阅读。</p></div>
+      <div class="source-label"><span class="status-dot" aria-hidden="true"></span>演示资料 · 本地阅读<span class="subtle">CUT 从 1 开始显示</span></div>
+    </div>
+    <section id="mismatch-panel" class="mismatch-panel" hidden aria-labelledby="mismatch-title">
+      <span class="tag warning">来源不匹配 · 演示</span>
+      <h2 id="mismatch-title">这份报告属于另一次导出</h2>
+      <p>即使场景名称相同，报告中的问题也不能直接定位到当前资料。</p>
+      <dl class="source-comparison"><div><dt>当前资料</dt><dd>雨后小镇 · 演示批次 B</dd></div><div><dt>报告来源</dt><dd>雨后小镇 · 演示批次 A</dd></div></dl>
+      <button id="browse-only" type="button" class="primary">先浏览当前资料</button>
+      <p class="subtle">正式版本将在此提供重新选择匹配资料或报告的操作。</p>
+    </section>
+    <div id="workspace" class="workspace">
+      <aside class="issue-panel panel" aria-labelledby="list-title">
+        <div class="panel-heading"><h2 id="list-title">审查问题</h2><span id="list-count" class="count">3</span></div>
+        <p id="list-caption" class="panel-caption">影响程度与确定程度分别展示</p>
+        <nav id="item-list" aria-label="审查问题"></nav>
+        <div class="list-footnote">这里只展示当前有效结论。示例不代表完整审查。</div>
+      </aside>
+      <section class="reader-panel panel" aria-labelledby="reader-title">
+        <header class="reader-heading"><div><p id="location-label" class="eyebrow"></p><h2 id="reader-title"></h2></div><span id="reader-tag" class="tag"></span></header>
+        <div class="context-toolbar">
+          <label>前后范围 <select id="context-range"><option value="1">各 1 个 CUT</option><option value="2">各 2 个 CUT</option><option value="4">各 4 个 CUT</option><option value="8">各 8 个 CUT</option></select></label>
+          <button id="save-default" type="button">设为默认</button>
+          <span id="range-caption" class="subtle"></span>
+        </div>
+        <details id="flow-details" class="flow-details">
+          <summary>查看相关流程 <span class="subtle">普通连接 / 脚本跳转</span></summary>
+          <div id="flow-graph" class="flow-graph" aria-label="演示资料中的相关连接"></div>
+          <p class="subtle graph-note">此图只展示演示资料中的关系；选择路线用于阅读，不代表游戏必然这样执行。</p>
+        </details>
+        <div id="route-controls" class="route-controls"></div>
+        <div id="reading-context" class="reading-context"></div>
+        <p class="reader-footnote">相邻内容按 CUT 阅读。同一 CUT 内有多段对白时一并显示。</p>
+      </section>
+      <aside class="detail-panel panel" aria-labelledby="detail-title">
+        <div class="panel-heading"><h2 id="detail-title">问题说明</h2><span class="tag">示例</span></div>
+        <div id="finding-detail"></div>
+      </aside>
+    </div>
+  </main>
+  <footer><span>交互设计预览 · 不读取或修改游戏文件</span><span id="feedback" role="status" aria-live="polite">选择问题，开始阅读</span></footer>
+</body>
+</html>

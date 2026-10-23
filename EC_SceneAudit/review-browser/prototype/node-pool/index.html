@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Scene 审查 · 节点池</title><link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="demo-bundle.css"><script type="module" src="demo-bundle.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span>S</span><strong>Scene 审查</strong><span class="muted scene-name">雨后小镇</span></div>
+    <div class="top-actions"><span class="demo-label">交互原型 · 全部为演示数据</span><label class="sr-only" for="report-mode">演示状态</label><select id="report-mode"><option value="report">资料 + 报告</option><option value="scene">仅资料</option><option value="mismatch">来源不匹配</option></select><a href="../index.html">旧版对比</a></div>
+  </header>
+  <main id="workspace">
+    <aside id="issues" aria-label="审查问题面板">
+      <div class="side-header"><button id="back" hidden type="button">← 返回列表</button><h1 id="side-title">审查问题</h1><button id="collapse" type="button" aria-label="收起问题面板">‹</button></div>
+      <section id="list-page"><div class="list-description"><span id="problem-count"></span><p>先选问题，再看它发生的位置</p></div><div id="filter-label" hidden></div><div id="problem-list"></div><details id="withdrawn"><summary>已撤销的问题</summary><div id="withdrawn-list"></div></details></section>
+      <section id="detail-page" hidden></section>
+      <div class="side-foot">颜色表示影响程度，确定程度单独说明。</div>
+    </aside>
+    <section id="stage" aria-label="节点池">
+      <div class="canvas-toolbar"><button id="expand" hidden type="button">审查问题</button><div><strong>节点池</strong><span id="selection-label" class="muted"></span></div>
+        <div class="canvas-navigation"><div id="part-search-control" class="part-search-control"><input id="part-search" type="search" placeholder="搜索 Part 名称" aria-label="搜索 Part 名称" role="combobox" aria-autocomplete="list" aria-controls="part-search-results" aria-expanded="false" autocomplete="off"><div id="part-search-results" role="listbox" hidden></div></div><div class="gesture-modes" aria-label="画布操作模式"><button id="mode-select" type="button" aria-pressed="true">选择 V</button><button id="mode-pan" type="button" aria-pressed="false">拖拽 H</button></div></div>
+        <div class="canvas-actions"><button id="fit" type="button">查看全图</button><button id="game-layout" disabled type="button">恢复游戏布局</button><button id="arrange" type="button">自动排列</button><button id="undo" disabled type="button">撤销布局</button><button id="save" type="button">保存布局</button></div></div>
+      <div id="source-warning" role="alert" hidden>报告属于另一批资料，问题定位与标记已停用；当前仅浏览演示场景。</div>
+      <div id="viewport" aria-label="可缩放节点画布">
+        <div id="world"><div id="regions"></div><svg id="edges" xmlns="http://www.w3.org/2000/svg" aria-label="节点连接"></svg><div id="nodes"></div></div>
+        <div id="marquee" hidden></div>
+      </div>
+      <div id="empty-selection">选择节点，展开 CUT 预览<br><span>或从左侧问题自动定位</span></div>
+      <section id="cut-panel" hidden aria-label="CUT 预览">
+        <header><div><strong id="part-name"></strong><span class="muted">CUT 预览 · 序号从 1 开始</span></div><button id="close-cuts" type="button" aria-label="关闭 CUT 预览">×</button></header>
+        <div id="before-context" class="context-stack before-stack"></div>
+        <div class="range-row before-range"><label>前面 <select id="before-range"></select> 个 CUT</label><button id="save-ranges" type="button">设为默认</button></div>
+        <div id="current-cut"></div>
+        <div class="range-row after-range"><label>后面 <select id="after-range"></select> 个 CUT</label><span id="range-status" class="muted"></span></div>
+        <div id="after-context" class="context-stack after-stack"></div>
+        <footer><label>CUT <input id="cut-number" type="number" min="1" aria-label="当前 CUT 序号"> / <span id="cut-total"></span></label><span class="muted">点击卡片查看完整文本</span></footer>
+        <input id="cut-slider" type="range" min="0" step="1" aria-label="当前 Part 的 CUT 滑条">
+      </section>
+      <div class="canvas-bottom"><div class="legend"><span class="normal-line"></span>普通连接 <span class="script-line"></span>脚本跳转 <span class="selection-dot"></span>当前选中</div><div class="zoom"><button id="zoom-out" type="button" aria-label="缩小">−</button><output id="zoom-value">100%</output><button id="zoom-in" type="button" aria-label="放大">+</button></div></div>
+    </section>
+  </main>
+  <footer class="app-footer"><span>滚轮缩放 · 空白左拖框选 · 节点左拖移动 · 右拖平移 · Ctrl 多选</span><span id="status" role="status" aria-live="polite">演示数据，不读取或修改游戏文件</span></footer>
+  <dialog id="fulltext"><header><div><span class="muted">完整文本</span><h2 id="fulltext-title"></h2></div><button id="close-fulltext" type="button" aria-label="关闭完整文本">×</button></header><div id="fulltext-content"></div></dialog>
+</body>
+</html>

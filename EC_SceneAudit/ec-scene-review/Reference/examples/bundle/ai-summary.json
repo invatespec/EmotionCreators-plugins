@@ -1,0 +1,1 @@
+{"schemaVersion":"1.0-ai","sourceEvidenceFile":"scene.json","scene":{"title":"测试 Scene","exportedAt":"2026-10-04T00:00:00Z"},"parts":[{"rawRef":"#/nodes/0/part","name":"起点"}],"scripts":[{"rawRef":"#/nodes/0/part/cuts/0/textBoxes/1/layouts/0/scriptBlocks/0"}]}

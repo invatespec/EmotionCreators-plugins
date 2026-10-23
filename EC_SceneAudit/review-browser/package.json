@@ -1,0 +1,21 @@
+{
+  "name": "ec-scene-review-browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/serve.mjs"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.8.11",
+    "ajv": "^8.17.1",
+    "lucide": "^1.55.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

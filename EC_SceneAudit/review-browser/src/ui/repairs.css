@@ -1,0 +1,50 @@
+.repair-dialog { width:min(760px,94vw); height:min(780px,92vh); max-height:92vh; box-sizing:border-box; overflow:hidden; border:1px solid #b8c8d3; border-radius:14px; padding:0; color:#23323b; background:#f8fafb; }
+.repair-dialog[open], .repair-editor[open] { display:flex; flex-direction:column; }
+.repair-dialog::backdrop, .repair-editor::backdrop { background:#20303c77; }
+.repair-dialog header, .repair-editor header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:20px 22px 12px; flex-shrink:0; background:#f8fafb; }
+.repair-dialog h2, .repair-editor h2 { margin:0; font-size:22px; }
+.repair-dialog header p, .repair-editor header p { margin:6px 0 0; font-size:13px; }
+.repair-scroll { overflow:auto; min-height:0; flex:1; padding:4px 22px 16px; }
+.repair-count { font-size:13px; color:#4b6b7c; margin:0 0 8px; }
+.repair-dialog footer { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:12px 22px; border-top:1px solid #dce4e9; flex-shrink:0; }
+.repair-editor-tools { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.repair-editor-tools button { font-size:14px; padding:6px 10px; }
+.repair-dialog footer .repair-import { max-width:240px; }
+.repair-entry { border-top:1px solid #e4eaee; padding:10px 0; }
+.repair-entry-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+/* 与节点补丁页节点名保持一致的字色与字号。 */
+.repair-entry-name { font-size:14px; color:#1f4e63; overflow-wrap:anywhere; }
+.repair-entry-actions { display:flex; gap:6px; flex-shrink:0; }
+.repair-entry-actions button { font-size:12px; padding:5px 8px; }
+#repair-message { width:100%; margin:0; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; color:#375f68; }
+/* 编辑页无底栏:状态消息当副标题用,随操作更新(打开已有草稿显示「正在编辑已有草稿。」等)。 */
+.repair-editor header #repair-editor-message { margin:6px 0 0; font-size:12px; color:#375f68; white-space:pre-wrap; overflow-wrap:anywhere; }
+.repair-editor { width:min(1080px,96vw); height:min(880px,94vh); max-height:94vh; box-sizing:border-box; overflow:hidden; border:1px solid #b8c8d3; border-radius:14px; padding:0; color:#23323b; background:#f8fafb; }
+.repair-target { margin:0 0 12px; font-size:13px; color:#4b6b7c; overflow-wrap:anywhere; }
+.repair-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; margin-bottom:16px; }
+.repair-columns > label { display:grid; gap:6px; font-size:13px; min-width:0; }
+.repair-columns pre, .repair-columns textarea { min-height:240px; max-height:46vh; overflow:auto; margin:0; box-sizing:border-box; border:1px solid #cad5de; border-radius:6px; padding:10px; background:#fff; font:13px/1.7 ui-monospace,Consolas,"Courier New",monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+.repair-columns textarea { resize:vertical; }
+.repair-columns pre { color:#54636f; }
+.repair-diff-section h3 { font-size:14px; margin:0 0 6px; }
+.repair-diff { max-height:260px; overflow:auto; border:1px solid #dce4e9; border-radius:6px; background:#fff; padding:6px 0; font:12px/1.7 ui-monospace,Consolas,"Courier New",monospace; }
+.repair-diff .muted { padding:4px 10px; }
+.diff-line { padding:1px 10px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.diff-line.add { background:#e8f5ec; color:#276544; }
+.diff-line.del { background:#fbeaea; color:#9c4038; }
+.diff-line.same { color:#6d7c88; }
+.diff-line.skip { color:#93a1ab; font-style:italic; }
+.repair-entry-button { font-size:12px; padding:3px 8px; margin-left:auto; white-space:nowrap; }
+.layout-heading { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+.layout-heading h4 { margin:0; }
+@media(max-width:760px) {
+  .repair-dialog, .repair-editor { width:calc(100vw - 16px); height:min(94vh,calc(100vh - 16px)); }
+  .repair-dialog header, .repair-editor header { padding:14px 14px 10px; gap:8px; }
+  .repair-scroll { padding:4px 14px 12px; }
+  .repair-dialog footer { padding:10px 14px; }
+  .repair-editor header { flex-wrap:wrap; }
+  .repair-columns { grid-template-columns:minmax(0,1fr); }
+  .repair-columns pre, .repair-columns textarea { min-height:150px; }
+  .repair-dialog h2, .repair-editor h2 { font-size:19px; }
+  .repair-dialog footer .repair-import { max-width:100%; }
+}

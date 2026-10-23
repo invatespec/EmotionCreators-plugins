@@ -1,0 +1,24 @@
+/* 未打开的 dialog 必须保持 display:none,否则会以绝对定位残留在页面上。 */
+.project-dialog { width:min(720px,94vw); max-height:90vh; padding:0; border:1px solid #b8c8d3; border-radius:14px; background:#f8fafb; color:#23323b; box-sizing:border-box; }
+.project-dialog[open] { display:flex; flex-direction:column; overflow:hidden; }
+.project-dialog::backdrop { background:#20303c77; }
+/* 标题栏吸顶,列表独立滚动,滚动条不再压住底部圆角。 */
+.project-dialog > header { position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 22px 14px; background:#f8fafb; border-bottom:1px solid #dce4e9; }
+.project-dialog h2 { margin:0; font-size:22px; }
+.project-dialog p { font-size:13px; line-height:1.6; }
+.project-scroll { overflow:auto; min-height:0; padding:16px 22px 22px; }
+.project-note { margin:0 0 4px; }
+.project-dialog label { display:grid; gap:8px; margin:8px 0 14px; }
+.project-dialog input { width:100%; box-sizing:border-box; border:1px solid #cad5de; border-radius:6px; padding:8px; font:inherit; }
+.project-toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.project-toolbar #project-save { margin-right:auto; }
+.project-entry { display:flex; flex-direction:column; gap:8px; padding:12px 0; border-top:1px solid #dce4e9; overflow-wrap:anywhere; }
+.project-entry.is-history { padding:8px 0 8px 10px; border-left:2px solid #d3dde4; }
+.project-entry-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.project-group { display:block; }
+.project-history { margin:4px 0 10px; }
+.project-history > summary { cursor:pointer; font-size:12px; color:#4b6b7c; padding:4px 0; }
+.project-registry { margin-top:18px; padding-top:12px; border-top:1px solid #dce4e9; }
+.project-registry h3 { margin:0 0 4px; font-size:16px; }
+#project-storage { color:#4b6b7c; overflow-wrap:anywhere; }
+#project-status { white-space:pre-wrap; color:#375f68; overflow-wrap:anywhere; }

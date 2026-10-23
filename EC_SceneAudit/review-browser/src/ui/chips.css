@@ -1,0 +1,13 @@
+.chip-field { position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-height:38px; padding:5px 8px; border:1px solid #cad5de; border-radius:8px; background:#fff; cursor:text; }
+.chip-field:focus-within { border-color:#82abcc; box-shadow:0 0 0 3px #cfe2f2aa; }
+.chip-list { display:flex; flex-wrap:wrap; gap:6px; }
+.chip { display:inline-flex; align-items:center; gap:4px; padding:3px 4px 3px 10px; border-radius:999px; background:#e6f1ea; color:#22513f; font-size:12px; line-height:1.5; max-width:100%; }
+.chip-remove { display:inline-flex; align-items:center; justify-content:center; width:17px; height:17px; padding:0; border:0; border-radius:999px; background:#00000010; color:#3c6a57; font-size:12px; line-height:1; }
+.chip-remove:hover { background:#0000001f; }
+.chip-input { flex:1 1 80px; min-width:80px; border:0; outline:none; padding:3px 2px; font:inherit; background:transparent; }
+/* 焦点提示由外层 .chip-field 统一给出,去掉 input 自身的聚焦描边。 */
+.chip-input:focus-visible { outline:none; }
+.chip-options { position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:20; display:flex; flex-wrap:wrap; gap:6px; max-height:190px; overflow:auto; padding:8px; border:1px solid #bccedc; border-radius:8px; background:#fff; box-shadow:0 8px 22px #203a5226; }
+.chip-option { padding:3px 10px; border-radius:999px; border:1px solid #cbd9e3; background:#f4f8fb; font-size:12px; }
+.chip-option:hover { background:#e6f1ea; border-color:#8fb8a4; }
+@media(max-width:760px) { .chip-field { min-height:34px; } }

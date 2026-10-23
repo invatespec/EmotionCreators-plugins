@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ec-scene-audit.invalid/schema/common.json",
+  "definitions": {
+    "reference": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "fileId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "const": "json-pointer"
+            },
+            "pointer": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fileId",
+            "kind",
+            "pointer"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "fileId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "const": "text-lines"
+            },
+            "startLine": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "endLine": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "fileId",
+            "kind",
+            "startLine",
+            "endLine"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "bundleId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "bundleId",
+        "manifestSha256"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
