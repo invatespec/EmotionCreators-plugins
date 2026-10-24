@@ -30,7 +30,8 @@ Focused on HEdit authoring QoL, ADV playback tooling, lighting, and memory fixes
 
 | Plugin | Version | Description |
 |--------|---------|-------------|
-| **[EC_VariableMod_SaveLoad](EC_VariableMod_SaveLoad/)** | 1.3.0 | Save/load for **`EC_VariableMod`**: persist variables + ADV position via `<save>` / `<load>` script tags, shared save folders across chapters, auto-save, and HPlay advance / auto-advance keys. **Requires `EC_VariableMod`.** |
+| **[EC_BackVarSync](EC_BackVarSync/)** | 1.0.0 | Variable save/load for **`EC_VariableMod`** that pairs with **`EC_back`**: saving an EC_back bookmark also snapshots global variables (restored when you jump back to that bookmark), plus a two-page play/chapter save panel (`F9`, shows/hides together with the expanded EC_back window) for carrying variables across chapter scripts, per-scene auto-save, and HPlay advance / auto-advance keys. Panel clicks don’t leak through to the game. **Requires `EC_VariableMod`**; soft-depends on `EC_back`. Replaces `EC_VariableMod_SaveLoad` — remove the old DLL to avoid double-advancing. |
+| **[EC_VariableMod_SaveLoad](EC_VariableMod_SaveLoad/)** | 1.3.0 | Save/load for **`EC_VariableMod`**: persist variables + ADV position via `<save>` / `<load>` script tags, shared save folders across chapters, auto-save, and HPlay advance / auto-advance keys. **Requires `EC_VariableMod`.** Superseded by `EC_BackVarSync`. |
 | **[EC_GamePOV_DOFPatch](EC_GamePOV_DOFPatch/)** | 1.0.1 | Soft-depends on `EC_GamePOV`. While POV is on, temporarily disables global DOF so the eye-locked camera doesn’t go fully blurry; restores DOF when POV turns off. |
 
 ### Lighting
