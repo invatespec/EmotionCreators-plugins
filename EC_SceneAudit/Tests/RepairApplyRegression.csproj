@@ -14,10 +14,6 @@
     <Compile Include="../Repair/RepairLayoutPointer.cs" />
     <Compile Include="../Repair/RepairPlanModels.cs" />
     <Compile Include="../Repair/RepairPlanReader.cs" />
-    <Compile Include="../Repair/SceneSnapshotJson.cs" />
-    <Compile Include="../Repair/RepairBundleReader.cs" />
-    <Compile Include="../Repair/RepairPreflightModels.cs" />
-    <Compile Include="../Repair/RepairPreflight.cs" />
     <Compile Include="../Repair/RepairTargetSink.cs" />
     <Compile Include="../Repair/RepairPointerOwnership.cs" />
     <Compile Include="../Repair/RepairWindowGeometry.cs" />
@@ -28,6 +24,5 @@
     <Compile Include="../Repair/RepairMemoryRestore.cs" />
     <Compile Include="../Repair/RepairApplyTransaction.cs" />
     <Compile Include="../Repair/RepairApplyEngine.cs" />
-    <Compile Include="../Repair/RepairVerifier.cs" />
   </ItemGroup>
 </Project>

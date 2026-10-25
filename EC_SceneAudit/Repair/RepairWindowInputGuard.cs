@@ -29,7 +29,7 @@ namespace EC_SceneAudit.Repair
             sampledFrame = frame;
             Ownership.BeginFrame();
 
-            var over = RepairPreflightWindow.IsMouseOverWindow();
+            var over = RepairWindow.IsMouseOverWindow();
             for (var button = 0; button < RepairPointerOwnership.ButtonCount; button++)
             {
                 // 极快点击可能同帧同时报告按下与松开，两个边沿都要处理，否则残留归窗口状态。
@@ -49,7 +49,7 @@ namespace EC_SceneAudit.Repair
         // 是否屏蔽游戏输入（节点射线、节点 Update 滚动缩放、相机）。
         public static bool BlocksGameInput()
         {
-            var window = RepairPreflightWindow.Instance;
+            var window = RepairWindow.Instance;
             if (window == null || !window.Visible)
             {
                 ReleaseCameraLock();
@@ -57,7 +57,7 @@ namespace EC_SceneAudit.Repair
             }
 
             Sample();
-            var block = Ownership.ShouldBlock(RepairPreflightWindow.IsMouseOverWindow());
+            var block = Ownership.ShouldBlock(RepairWindow.IsMouseOverWindow());
             if (block)
                 EnsureCameraLock();
             else
@@ -121,11 +121,11 @@ namespace EC_SceneAudit.Repair
         // 相机委托只读：不安装/卸载，避免在 GetInvocationList 迭代期间改动委托链。
         private static bool CameraLockFunc()
         {
-            var window = RepairPreflightWindow.Instance;
+            var window = RepairWindow.Instance;
             if (window == null || !window.Visible)
                 return false;
             Sample();
-            return Ownership.ShouldBlock(RepairPreflightWindow.IsMouseOverWindow());
+            return Ownership.ShouldBlock(RepairWindow.IsMouseOverWindow());
         }
     }
 }

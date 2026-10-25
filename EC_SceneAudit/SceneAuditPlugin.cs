@@ -16,14 +16,14 @@ namespace EC_SceneAudit
     {
         public const string GUID = "EC_SceneAudit";
         public const string PluginName = "EC Scene Audit";
-        public const string Version = "1.1.0";
+        public const string Version = "1.2.0";
 
         private const string HEditSceneName = "HEditScene";
 
         internal static ConfigEntry<KeyboardShortcut> ExportHotkey { get; private set; }
-        internal static ConfigEntry<KeyboardShortcut> PreflightHotkey { get; private set; }
+        internal static ConfigEntry<KeyboardShortcut> RepairHotkey { get; private set; }
 
-        private RepairPreflightWindow preflightWindow;
+        private RepairWindow repairWindow;
         private Harmony harmony;
         private bool inputHooksReady;
 
@@ -35,63 +35,64 @@ namespace EC_SceneAudit
                 new KeyboardShortcut(KeyCode.F8),
                 "Export a read-only Scene review bundle with referenced external scripts.");
 
-            PreflightHotkey = Config.Bind(
+            RepairHotkey = Config.Bind(
                 "Config",
                 "Repair Preflight",
                 new KeyboardShortcut(KeyCode.F8, KeyCode.LeftControl),
-                "Open the read-only repair preflight window in the HEdit node overview.");
+                "Show or hide the repair and node patch window in the HEdit node overview.");
 
             var planPath = Config.Bind("Repair", "Plan Path", "", "Path to the exported repair plan JSON.");
-            var bundlePath = Config.Bind("Repair", "Bundle Directory", "", "Directory of the original F8 review bundle.");
+            Config.Bind("Repair", "Bundle Directory", "", "Review bundle directory.");
             var nodePatchPath = Config.Bind("Repair", "Node Patch Path", "", "Path to the exported ec-scene-node-patch JSON.");
-            preflightWindow = new RepairPreflightWindow(Logger, planPath, bundlePath, nodePatchPath);
-            RepairPreflightWindow.Instance = preflightWindow;
+            repairWindow = new RepairWindow(Logger, planPath, nodePatchPath);
+            RepairWindow.Instance = repairWindow;
             try
             {
                 harmony = new Harmony(GUID);
-                harmony.PatchAll(typeof(RepairPreflightHooks));
+                harmony.PatchAll(typeof(RepairWindowHooks));
                 inputHooksReady = true;
             }
             catch (Exception ex)
             {
-                Logger.LogError("Repair preflight input hooks failed: " + ex);
+                Logger.LogError("Repair window input hooks failed: " + ex);
             }
 
             // 游戏使用自定义 Scene 管理器，不能用 Unity active scene 决定插件组件是否运行。
             enabled = true;
             Logger.LogMessage(
                 PluginName + " v" + Version + " loaded. Export hotkey: " + ExportHotkey.Value
-                + ", repair preflight hotkey: " + PreflightHotkey.Value);
+                + ", repair window hotkey: " + RepairHotkey.Value);
         }
 
         private void Update()
         {
             // 鼠标键归属每帧只采样一次；Update 早于相机的 LateUpdate，保证本帧屏蔽判定及时。
             RepairWindowInputGuard.Sample();
-            // 有未清理会话（内存快照）时保留窗口：离开总览只禁止新的写回，恢复入口不能消失。
-            if (preflightWindow != null && preflightWindow.Visible && !preflightWindow.KeepsWindowOpen
-                && !RepairPreflightContext.IsNodeOverviewActive())
-                preflightWindow.Close();
-            // 先处理预检组合键并 return，避免 Ctrl+F8 同时触发普通 F8 导出。
-            if (PreflightHotkey != null && ShortcutDown(PreflightHotkey.Value))
+            // Ctrl+F8 只控制修复窗口，避免同时触发普通 F8 导出。
+            if (RepairHotkey != null && ShortcutDown(RepairHotkey.Value))
             {
                 if (!inputHooksReady)
                 {
-                    Logger.LogWarning("Repair preflight input hooks unavailable; window disabled. See the startup error.");
+                    Logger.LogWarning("Repair window input hooks unavailable; window disabled. See the startup error.");
                     return;
                 }
-                if (!RepairPreflightContext.IsNodeOverviewActive())
+                if (repairWindow.Visible)
                 {
-                    Logger.LogWarning("Repair preflight hotkey detected, but HEdit node overview is not active.");
+                    repairWindow.Close();
+                    return;
+                }
+                if (!RepairEditorContext.IsNodeOverviewActive())
+                {
+                    Logger.LogWarning("Repair window hotkey detected, but HEdit node overview is not active.");
                     return;
                 }
 
-                Logger.LogMessage("Repair preflight hotkey detected; opening window.");
-                preflightWindow.Open();
+                Logger.LogMessage("Repair window hotkey detected; opening window.");
+                repairWindow.Open();
                 return;
             }
 
-            if (RepairPreflightWindow.HasInputFocus || ExportHotkey == null || !ShortcutDown(ExportHotkey.Value))
+            if (RepairWindow.HasInputFocus || ExportHotkey == null || !ShortcutDown(ExportHotkey.Value))
                 return;
 
             if (!IsHEditContextAvailable())
@@ -106,28 +107,28 @@ namespace EC_SceneAudit
 
         private void OnGUI()
         {
-            preflightWindow?.OnGUI();
+            repairWindow?.OnGUI();
         }
 
         // 失焦时 Unity 不投递松开边沿，按键归属会残留并持续屏蔽节点输入。
         private void OnApplicationFocus(bool hasFocus)
         {
             if (!hasFocus)
-                RepairWindowInputGuard.Reset();
+                repairWindow?.ReleaseInput();
         }
 
         private void OnDestroy()
         {
-            preflightWindow?.Close();
-            preflightWindow?.Dispose();
-            RepairPreflightWindow.Instance = null;
+            repairWindow?.Close();
+            repairWindow?.Dispose();
+            RepairWindow.Instance = null;
             try
             {
                 harmony?.UnpatchSelf();
             }
             catch (Exception ex)
             {
-                Logger.LogError("Repair preflight input hooks unload failed: " + ex);
+                Logger.LogError("Repair window input hooks unload failed: " + ex);
             }
         }
 

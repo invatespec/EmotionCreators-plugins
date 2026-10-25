@@ -61,7 +61,7 @@ namespace EC_SceneAudit.Repair
 
         bool TryWriteSlot(string sourceUid, int index, RepairSlotValue value, out string error);
 
-        // 修改前门禁：Scene 身份可用、没有活动 ADV 编辑引用、目标节点齐全。
+        // 当前编辑上下文与指定节点是否可用；批量应用只检查上下文，缺失节点逐项跳过。
         bool TryValidateTargets(ICollection<string> targetUids, out string error);
     }
 

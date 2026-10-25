@@ -7,17 +7,17 @@ using YS_Node;
 namespace EC_SceneAudit.Repair
 {
     // IMGUI 窗口和 uGUI 各自处理同一份输入；窗口命中区要阻断节点画布的拖拽与射线。
-    internal static class RepairPreflightHooks
+    internal static class RepairWindowHooks
     {
         [HarmonyPrefix]
         [HarmonyPatch(typeof(HEditScene), "ShortcutKey")]
-        private static bool ShortcutKeyPrefix() => !RepairPreflightWindow.HasInputFocus;
+        private static bool ShortcutKeyPrefix() => !RepairWindow.HasInputFocus;
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(HEditGlobal), "isInputNow", MethodType.Getter)]
         private static void IsInputNowPostfix(ref bool __result)
         {
-            __result = __result || RepairPreflightWindow.HasInputFocus;
+            __result = __result || RepairWindow.HasInputFocus;
         }
 
         [HarmonyPrefix]

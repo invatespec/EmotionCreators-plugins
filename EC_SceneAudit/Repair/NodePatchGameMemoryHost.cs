@@ -144,13 +144,18 @@ namespace EC_SceneAudit.Repair
             NodeUI target;
             if (!TryGetNode(sourceUid, out source, out error))
                 return false;
-            if (!TryGetNode(targetUid, out target, out error))
-                return false;
             if (!HasSlot(source.nodeBase, slot))
             {
                 error = "节点槽位越界：" + sourceUid + "/slot:" + slot;
                 return false;
             }
+            if (string.IsNullOrEmpty(targetUid))
+            {
+                source.DisconnectLine(slot);
+                return true;
+            }
+            if (!TryGetNode(targetUid, out target, out error))
+                return false;
             if (InputRectRef(target) == null)
             {
                 error = "目标节点没有输入端口：" + targetUid;

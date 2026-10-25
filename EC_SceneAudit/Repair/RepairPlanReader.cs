@@ -7,7 +7,7 @@ using EC_SceneAudit.Export;
 
 namespace EC_SceneAudit.Repair
 {
-    // 清单是唯一输入格式：版本、位置、长度、类型和重复项都在这里拒绝，UI 与预检不另写一套规则。
+    // 文件格式集中解析；是否能找到目标由当前 Scene 决定，不比较导出时的原文。
     internal static class RepairPlanReader
     {
         public const int MaxPlanBytes = 64 * 1024 * 1024;

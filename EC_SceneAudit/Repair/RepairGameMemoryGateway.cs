@@ -8,10 +8,7 @@ using YS_Node;
 namespace EC_SceneAudit.Repair
 {
     // 游戏内存适配：Part/NodeBase 走原生 Save/Load 往返；连线槽位直接读写 NodeControl.dictNode
-    // 的 NodeBase（编辑器实时连线以它为准，HEditData.nodeBases 不参与）。
-    //
-    // GenerationOwner 绑定 nodeControl.dictNode 实例：该字典每次 RebuildNodeUI 都会换新，
-    // 所以切换 Scene 或同路径重新加载都会让旧快照失效。
+    // 的 NodeBase；dictNode 实例区分加载世代，普通节点编辑不影响快照有效性。
     internal sealed class RepairGameMemoryGateway : IRepairMemoryHost
     {
         private const int NodeSlotCount = 5;
@@ -125,11 +122,27 @@ namespace EC_SceneAudit.Repair
             if (!TryGetNode(value.Uid, out node, out error))
                 return false;
 
+            var oldSlots = new RepairSlotValue[NodeSlotCount];
+            for (var index = 0; index < NodeSlotCount; index++)
+                TryReadSlot(value.Uid, index, out oldSlots[index], out _);
             string codecError;
             if (!RepairNodeCodec.TryLoadInto(node.nodeBase, value.Data, RepairPartCodec.FormatVersion(data), out codecError))
             {
                 error = "节点反序列化失败（" + value.Uid + "）：" + codecError;
                 return false;
+            }
+            // 已删除的连接端点不再写回；节点其它字段及仍存在的连接照常恢复。
+            for (var index = 0; index < NodeSlotCount; index++)
+            {
+                var child = node.nodeBase.childUID[index];
+                if (string.IsNullOrEmpty(child) || TryGetNode(child, out _, out _))
+                    continue;
+                var old = oldSlots[index];
+                node.nodeBase.childUID[index] = old.ChildUid;
+                node.nodeBase.endConditionType[index] = (EndConditionType)old.EndConditionType;
+                node.nodeBase.endConditionCount[index] = old.EndConditionCount;
+                node.nodeBase.fadeType[index] = old.FadeType;
+                node.nodeBase.fadeTime[index] = old.FadeTime;
             }
             // Copy 只改数据，视觉连线要按新槽位重建。
             SyncAllLines(node);
@@ -172,6 +185,8 @@ namespace EC_SceneAudit.Repair
             }
 
             var child = value.ChildUid ?? string.Empty;
+            if (!string.IsNullOrEmpty(child) && !TryGetNode(child, out _, out _))
+                return true;
             // DisconnectLine 会清空 childUID 并销毁旧线，所以先记下新值再回填。
             node.DisconnectLine(index);
             var nodeBase = node.nodeBase;
@@ -273,14 +288,14 @@ namespace EC_SceneAudit.Repair
                 && nodeBase.fadeType != null && nodeBase.fadeTime != null;
         }
 
-        private static void SyncAllLines(NodeUI node)
+        private void SyncAllLines(NodeUI node)
         {
             for (var index = 0; index < NodeSlotCount; index++)
             {
                 var child = node.nodeBase.childUID[index];
                 node.DisconnectLine(index);
                 node.nodeBase.childUID[index] = child ?? string.Empty;
-                if (!string.IsNullOrEmpty(child))
+                if (!string.IsNullOrEmpty(child) && TryGetNode(child, out _, out _))
                     node.CreateConnectLine(index, child);
             }
         }

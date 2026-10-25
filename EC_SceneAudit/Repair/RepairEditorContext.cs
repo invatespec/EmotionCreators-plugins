@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace EC_SceneAudit.Repair
 {
-    internal static class RepairPreflightContext
+    internal static class RepairEditorContext
     {
         private const float ProbeInterval = 0.25f;
 

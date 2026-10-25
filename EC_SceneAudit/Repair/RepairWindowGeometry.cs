@@ -23,10 +23,10 @@ namespace EC_SceneAudit.Repair
 
     internal static class RepairWindowGeometry
     {
-        public const float PreferredWidth = 780f;
-        public const float PreferredHeight = 640f;
-        public const float MinimumWidth = 240f;
-        public const float MinimumHeight = 180f;
+        public const float PreferredWidth = 640f;
+        public const float PreferredHeight = 440f;
+        public const float MinimumWidth = 320f;
+        public const float MinimumHeight = 260f;
         public const float HorizontalMargin = 24f;
         public const float VerticalMargin = 48f;
         public const float PathFieldLineCount = 2f;

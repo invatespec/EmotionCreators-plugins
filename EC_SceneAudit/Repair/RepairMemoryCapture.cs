@@ -44,7 +44,7 @@ namespace EC_SceneAudit.Repair
                 error = "清单没有可快照的目标 Part。";
                 return false;
             }
-            if (!host.TryValidateTargets(order, out error))
+            if (!host.TryValidateTargets(new string[0], out error))
                 return false;
 
             var result = new RepairMemorySnapshot(host.SceneOwner, host.NodeOwner, host.GenerationOwner, host.SlotCount);
@@ -53,19 +53,18 @@ namespace EC_SceneAudit.Repair
                 RepairPartValue part;
                 if (!host.TryReadPart(uid, out part, out error) || part == null)
                 {
-                    error = "快照目标 Part 失败（" + uid + "）：" + error;
-                    return false;
+                    continue;
                 }
                 RepairNodeValue node;
                 if (!host.TryReadNode(uid, out node, out error) || node == null)
                 {
-                    error = "快照目标节点失败（" + uid + "）：" + error;
-                    return false;
+                    continue;
                 }
                 // 复制成独立字节，避免后续内存改动穿透到快照。
                 result.Parts.Add(RepairMemoryCopy.Part(part));
                 result.TargetNodes.Add(RepairMemoryCopy.Node(node));
             }
+            targetUids.RemoveWhere(uid => !result.HasPart(uid));
 
             try
             {
@@ -78,8 +77,7 @@ namespace EC_SceneAudit.Repair
                         RepairSlotValue slot;
                         if (!host.TryReadSlot(sourceUid, index, out slot, out error))
                         {
-                            error = "读取连线槽位失败（" + sourceUid + "/slot:" + index + "）：" + error;
-                            return false;
+                            continue;
                         }
                         if (string.IsNullOrEmpty(slot.ChildUid) || !targetUids.Contains(slot.ChildUid))
                             continue;
@@ -99,6 +97,7 @@ namespace EC_SceneAudit.Repair
             }
 
             snapshot = result;
+            error = null;
             return true;
         }
     }
