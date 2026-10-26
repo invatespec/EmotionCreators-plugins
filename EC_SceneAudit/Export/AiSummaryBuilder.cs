@@ -108,6 +108,8 @@ namespace EC_SceneAudit.Export
                 }
             }
 
+            AddNoExitFinding(node, nodeIndex, findings);
+
             parts.Add(new AiPartIndex
             {
                 nodeUid = node.uid,
@@ -118,6 +120,86 @@ namespace EC_SceneAudit.Export
                 textBoxCount = textBoxCount,
                 rawRef = partRef
             });
+        }
+
+        // ADV 运行时只按最后 CUT 的选项数选下一步，NotUsed 槽即使有目标也不参与；编辑器 NodeCheck 覆盖不到。
+        private static void AddNoExitFinding(NodeSnapshot node, int nodeIndex, List<AiFinding> findings)
+        {
+            if (!string.Equals(node.kind, "ADV", StringComparison.Ordinal)
+                || node.isSystemNode
+                || node.outputs == null
+                // CUT 读不到时无法判断运行时出口，交给 part-read-failed warning，不报死路。
+                || node.part.cuts == null
+                || node.part.cuts.Length == 0)
+                return;
+            if (HasScriptExit(node.part))
+                return;
+
+            var optionCount = LastCutOptionCount(node.part.cuts);
+            var usableCount = optionCount > 0 ? optionCount : 1;
+            var emptySlots = new List<string>();
+            for (var slot = 0; slot < usableCount && slot < 5; slot++)
+            {
+                if (!HasTarget(node.outputs, slot))
+                    emptySlots.Add((slot + 1).ToString());
+            }
+            if (emptySlots.Count == 0)
+                return;
+
+            var name = string.IsNullOrEmpty(node.part.name) ? node.name : node.part.name;
+            findings.Add(new AiFinding(
+                "part-no-exit",
+                name + " 的出口 " + string.Join("、", emptySlots) + " 没有目标，播放到这里不会继续。",
+                "#/nodes/" + nodeIndex));
+        }
+
+        // 运行时按 cuts 数组最后一个 CUT 决定出口：有选项走选项槽，否则只读 slot0（ADVPlay.OnClick / LoadCut）。
+        private static int LastCutOptionCount(CutSnapshot[] cuts)
+        {
+            for (var index = cuts == null ? -1 : cuts.Length - 1; index >= 0; index--)
+            {
+                if (cuts[index] != null)
+                    return cuts[index].endCut ? cuts[index].optionCount : 0;
+            }
+            return 0;
+        }
+
+        // 任一跳转类命令（含动态目标和外部脚本）都可能接管后续，静态无法确认出口缺失。
+        private static bool HasScriptExit(PartSnapshot part)
+        {
+            for (var cutIndex = 0; part.cuts != null && cutIndex < part.cuts.Length; cutIndex++)
+            {
+                var boxes = part.cuts[cutIndex]?.textBoxes;
+                for (var boxIndex = 0; boxes != null && boxIndex < boxes.Length; boxIndex++)
+                {
+                    var layouts = boxes[boxIndex]?.layouts;
+                    for (var layoutIndex = 0; layouts != null && layoutIndex < layouts.Length; layoutIndex++)
+                    {
+                        var blocks = layouts[layoutIndex]?.scriptBlocks;
+                        for (var blockIndex = 0; blocks != null && blockIndex < blocks.Length; blockIndex++)
+                        {
+                            var references = blocks[blockIndex]?.references;
+                            for (var refIndex = 0; references != null && refIndex < references.Length; refIndex++)
+                            {
+                                if (references[refIndex] != null
+                                    && string.Equals(references[refIndex].kind, "flow", StringComparison.Ordinal))
+                                    return true;
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static bool HasTarget(OutputSlotSnapshot[] outputs, int slot)
+        {
+            for (var index = 0; index < outputs.Length; index++)
+            {
+                if (outputs[index] != null && outputs[index].slot == slot)
+                    return !string.IsNullOrEmpty(outputs[index].targetUid);
+            }
+            return false;
         }
 
         private static void AddTextBoxScripts(
@@ -246,6 +328,9 @@ namespace EC_SceneAudit.Export
                 return null;
 
             var command = element.Name;
+            if (!VariableModScanner.IsKnownCommand(command))
+                return null;
+
             var attributes = ToAttributes(element);
             var sourceOffset = blockOffset;
             var targetStatus = FindTargetStatus(

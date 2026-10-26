@@ -4,6 +4,7 @@ import { validateAnnotations } from './annotations.mjs';
 import { emptyRepairs, validateRepairs } from './repairs.mjs';
 import { validateMigration } from './migration-metadata.mjs';
 import { recoverStoredNodePatch } from './node-patch-recovery.mjs';
+import { createdEdges } from './node-patch.mjs';
 import { validateRouteOffsets } from './web-layout.mjs';
 import * as api from './api.mjs';
 
@@ -28,7 +29,8 @@ export async function prepareProject(project) {
   const repairs = project.repairs === undefined ? emptyRepairs(data) : validateRepairs(project.repairs, data);
   const recovery = recoverStoredNodePatch(project.nodePatch, data, project.nodePatchReview);
   const migration = project.migration === undefined ? undefined : validateMigration(project.migration);
-  const routeOffsets = validateRouteOffsets(project.routeOffsets, data);
+  // 空槽补丁新建的边属于当前普通边，路线校验必须放行它们。
+  const routeOffsets = validateRouteOffsets(project.routeOffsets, data, createdEdges(data.baseEdges, recovery.nodePatch, data));
   if (migration?.source.projectId === project.id) throw new Error('更新记录的来源不能是当前项目自身');
   return { result, data, checked, annotations, repairs, nodePatch: recovery.nodePatch, nodePatchReview: recovery.nodePatchReview,
     migration, routeOffsets, files: projectFiles(project.files), report: project.report, previous: project.previous, name: projectName(project.name) };
@@ -47,7 +49,7 @@ export async function createProject({ name, files, report, previous, data, annot
   if (recovery.nodePatch.connections.length || recovery.nodePatch.layout) project.nodePatch = structuredClone(recovery.nodePatch);
   if (recovery.nodePatchReview) project.nodePatchReview = structuredClone(recovery.nodePatchReview);
   if (migration !== undefined) project.migration = validateMigration(migration);
-  const routes = validateRouteOffsets(routeOffsets, data);
+  const routes = validateRouteOffsets(routeOffsets, data, createdEdges(data.baseEdges, recovery.nodePatch, data));
   if (Object.keys(routes).length) project.routeOffsets = routes;
   await prepareProject(project); return project;
 }

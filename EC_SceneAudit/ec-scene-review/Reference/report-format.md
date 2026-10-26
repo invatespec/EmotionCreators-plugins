@@ -2,7 +2,7 @@
 
 输出一段简短说明和独立的 review-report.json。只有在会话无法创建附件时才用单个 JSON 代码块交付，并注明文件名；不要在 JSON 内加入 Markdown。
 
-精确结构见 [report.schema.json](schemas/report.schema.json)。可参考 [首版示例](examples/report-r1.json)、[撤销后的修订版](examples/report-r2.json) 与它们的 [合成资料包](examples/bundle/bundle.json)。示例只是格式演示，不能当用户 Scene 的审查结论。
+精确结构见 [report.schema.json](schemas/report.schema.json)。可参考 [首版示例](examples/report-r1.json)、[撤销后的修订版](examples/report-r2.json)、[精简撤销示例](examples/report-r3-compact.json) 与它们的 [合成资料包](examples/bundle/bundle.json)。示例只是格式演示，不能当用户 Scene 的审查结论。
 
 ## 顶层字段
 
@@ -20,7 +20,7 @@ excluded 元素包含 scope 和 reason，可附 reference。reviewed 必须对�
 
 ## 问题字段
 
-每项必需 id、status、severity、certainty、title、locations、trigger、evidence、impact、recommendation、revisionReason。
+每项必需 id、status、revisionReason。status=withdrawn 时其余字段可省略，由前版同 id 条目补齐（见[精简撤销项](#精简撤销项)）；status=active 时还必须写 severity、certainty、title、locations、trigger、evidence、impact、recommendation。
 
 - status：active / withdrawn。
 - severity：blocker / major / minor / info，表示影响大小。
@@ -41,11 +41,28 @@ JSON 字段承载结构，展示标签从真实证据推导。外部 XML 问题�
 每次生成一份自包含的当前报告。不要将新结论追加到旧 Markdown 后让用户自行合并。
 
 - 同一问题继续沿用 finding.id，新的 reportId 指向旧版 supersedesReportId。
-- 确认撤销的旧问题仍列出，status=withdrawn，并保留撤销依据。
+- 确认撤销的旧问题仍列出，status=withdrawn，并保留撤销依据；有前版时可只写三个字段（见下节）。
 - 合并/拆分可添加 replacesFindingIds；被替换 ID 不能同时作为有效问题。它们必须来自指定的前版报告。
 - 前版有效问题不能无说明地消失：保留、明确撤销或显式替换。
 - 前版未提供时当前报告仍可读，但修订关系未核验。不要伪造旧 ID。
-- 换了 F8 批次或修改任何证据文件后，重新基于新来源分析，不把它当同一来源内的报告修订。
+- 同一 Scene 修改后重导出的新批次可以直接沿用旧报告作为前版：新报告 source 指向新批次，supersedesReportId 填旧报告 ID，问题 ID 保持不变，证据与引文全部改写为新证据里的位置。网页会按问题 ID 核对修订关系并提示前版来自另一批资料。
+- 换了 Scene（不是同一 Scene 的再次导出）时，不把它当同一来源内的报告修订，重新分析。
+
+### 精简撤销项
+
+提供前版时，撤销项可以只写三个字段，其余从前版同 id 条目继承，不必重抄：
+
+```json
+{ "id": "f3", "status": "withdrawn", "revisionReason": "重新核对后确认该分支有脚本出口。" }
+```
+
+- 写了的字段覆盖前版值，没写的保留前版值。需要改标题就只写 title。
+- 继承来的 locations 与 evidence 属于前版批次。新批次里解析不到会报错，必须改写为新位置；其余字段不用动。
+- 只有 withdrawn 能这样写。修改既有问题、replacesFindingIds 替换项仍须写全字段（撤销同时带 replacesFindingIds 也算替换项）。
+- 没有前版时撤销项必须写全，不能只写三个字段。
+- 连续两轮撤销同一问题时前版本身也可能精简；此时补不全的字段保留缺省并以 `inherits-incomplete` 提示，不判失败。
+
+核对方法是：拿到新资料包先逐条看旧问题，找到对应位置判断是否仍成立。节点位置或内容变了就整条重写，没变才用继承。
 
 ## 确定程度与静态边界
 

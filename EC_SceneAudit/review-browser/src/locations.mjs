@@ -60,10 +60,11 @@ export function mapLocation(bundle, model, reference, visited = new Set()) {
 const certainty = { confirmed: '静态事实已确认', conditional: '取决于触发条件', unknown: '仍需运行验证' };
 export function adaptFindings(bundle, model, report) {
   return report.findings.map(finding => {
-    const locations = finding.locations.flatMap(reference => mapLocation(bundle, model, reference));
-    return { ...finding, certainty: certainty[finding.certainty], locations,
+    // 精简撤销项在补不全时可能缺位置与证据；撤销区仍要能列出它，不能因为缺字段整页崩掉。
+    const locations = (finding.locations || []).flatMap(reference => mapLocation(bundle, model, reference));
+    return { ...finding, certainty: certainty[finding.certainty] || '', locations,
       external: locations.some(item => item.associated),
-      quote: finding.evidence.map(item => `${describeLocation(bundle, item.reference).label}\n${item.explanation}\n${item.quote}`).join('\n\n'),
-      revision: finding.revisionReason || '', evidence: finding.evidence };
+      quote: (finding.evidence || []).map(item => `${describeLocation(bundle, item.reference).label}\n${item.explanation}\n${item.quote}`).join('\n\n'),
+      revision: finding.revisionReason || '', evidence: finding.evidence || [] };
   });
 }

@@ -16,7 +16,7 @@ namespace EC_SceneAudit
     {
         public const string GUID = "EC_SceneAudit";
         public const string PluginName = "EC Scene Audit";
-        public const string Version = "1.2.0";
+        public const string Version = "1.3.0";
 
         private const string HEditSceneName = "HEditScene";
 

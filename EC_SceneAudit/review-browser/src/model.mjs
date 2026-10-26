@@ -13,7 +13,8 @@ function adaptCut(cut, rawIndex) {
       layouts: box.layouts.map((layout, layoutRawIndex) => ({ layoutIndex: layout.layoutIndex, rawIndex: layoutRawIndex, rawText: layout.rawText })),
       text: box.layouts.map(layout => previewText(layout.rawText)).filter(Boolean).join('\n') || '（空文本或仅含脚本）' };
   });
-  return { sourceIndex: cut.sourceIndex, rawIndex, boxes, choices: boxes.filter(box => box.option).map(box => optionText(box.layouts.find(layout => layout.layoutIndex === 0)?.rawText) || '（选项文字为空或仅含脚本）'), endCut: cut.endCut };
+  // optionCount 来自游戏 CUT 字段；保留它可让「可用出口」判定与导出侧完全同源。
+  return { sourceIndex: cut.sourceIndex, rawIndex, boxes, choices: boxes.filter(box => box.option).map(box => optionText(box.layouts.find(layout => layout.layoutIndex === 0)?.rawText) || '（选项文字为空或仅含脚本）'), endCut: cut.endCut, optionCount: Number.isInteger(cut.optionCount) ? cut.optionCount : null };
 }
 
 function adaptNode(node, rawIndex) {

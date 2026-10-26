@@ -101,17 +101,17 @@ namespace EC_SceneAudit.Repair
 
                 var beforeValue = RequiredObject(item, "before", path);
                 RejectUnknown(beforeValue, path + ".before", "targetUid", "conditionType", "conditionCount", "fadeType", "fadeTime");
+                // before.targetUid 为空表示当前槽未连接，本补丁为该槽创建目标。
                 var targetUid = RequiredString(beforeValue, "targetUid", path + ".before");
-                if (targetUid.Length == 0)
-                    throw new RepairInputException(path + ".before.targetUid 不能为空；本补丁不创建新连接。");
                 var afterValue = RequiredObject(item, "after", path);
                 RejectUnknown(afterValue, path + ".after", "targetUid");
                 var afterUid = RequiredString(afterValue, "targetUid", path + ".after");
-                if (afterUid.Length == 0)
-                    throw new RepairInputException(path + ".after.targetUid 不能为空；本补丁不删除连接。");
-                if (string.Equals(targetUid, afterUid, StringComparison.Ordinal))
+                // after.targetUid 为空表示断开该槽；此时 before 必须有目标，否则是无变化项。
+                if (afterUid.Length == 0 && targetUid.Length == 0)
+                    throw new RepairInputException(path + " 的 before 与 after 都为空，属于无变化项。");
+                if (afterUid.Length > 0 && string.Equals(targetUid, afterUid, StringComparison.Ordinal))
                     throw new RepairInputException(path + " 的 after.targetUid 与 before 相同，属于无变化项。");
-                if (string.Equals(sourceUid, afterUid, StringComparison.Ordinal))
+                if (afterUid.Length > 0 && string.Equals(sourceUid, afterUid, StringComparison.Ordinal))
                     throw new RepairInputException(path + ".after.targetUid 不能指向来源节点自身。");
 
                 var conditionType = RequiredString(beforeValue, "conditionType", path + ".before");

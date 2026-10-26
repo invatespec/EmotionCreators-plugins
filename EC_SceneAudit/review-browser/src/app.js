@@ -87,7 +87,8 @@ async function applyReports(token) {
 }
 
 function displayReport(report, checked) {
-  const findings = checked.ok && report ? adaptFindings(bundleResult.bundle, view.data, report) : [];
+  // 精简撤销项在校验时从前版补齐；展示要用补齐后的内容，否则撤销区没有标题。
+  const findings = checked.ok && report ? adaptFindings(bundleResult.bundle, view.data, checked.expanded ?? report) : [];
   view.setReport(findings, checked.mode);
   reportOverview(report, checked);
   const notes = [...bundleResult.warnings, ...view.data.notices, ...checked.errors, ...checked.warnings];

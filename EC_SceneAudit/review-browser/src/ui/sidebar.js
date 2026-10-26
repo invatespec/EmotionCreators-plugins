@@ -4,7 +4,9 @@ import { nodeById, validLocation, severityLabel, cutNumber } from './domain.js';
 export function mountSidebar({ data, state, actions }) {
   function tags(finding) {
     const result = el('div', 'finding-tags');
-    result.append(el('span', `tag ${finding.severity}`, severityLabel[finding.severity]), el('span', 'tag neutral', finding.certainty));
+    // 补不全的精简撤销项缺严重程度与确定程度，宁可不显示也不显示空白徽标。
+    if (finding.severity) result.append(el('span', `tag ${finding.severity}`, severityLabel[finding.severity]));
+    if (finding.certainty) result.append(el('span', 'tag neutral', finding.certainty));
     return result;
   }
   function locationText(location) {
@@ -26,16 +28,19 @@ export function mountSidebar({ data, state, actions }) {
     }));
     if (!visible.length) $('problem-list').append(el('p', 'empty-message', state.mode === 'mismatch' ? '来源不匹配，已停止问题定位。节点池仍可浏览。' : '尚无可显示的报告问题。可以直接选择节点阅读。'));
     $('withdrawn').hidden = state.mode !== 'report';
-    $('withdrawn-list').replaceChildren(...data.findings.filter((item) => item.status === 'withdrawn').map((finding) => button(`${finding.id} · ${finding.title}。${finding.revision || finding.quote}`, () => actions.openFinding(finding.id), 'withdrawn-entry')));
+    // 补不全的精简撤销项没有标题，退回问题 ID，避免整行显示 undefined。
+    $('withdrawn-list').replaceChildren(...data.findings.filter((item) => item.status === 'withdrawn').map((finding) => button(`${finding.id} · ${finding.title || '（标题未提供）'}。${finding.revision || finding.quote}`, () => actions.openFinding(finding.id), 'withdrawn-entry')));
   }
   function section(title, text, className = '') {
+    // 补不全的精简撤销项没有这些字段，整段省略比留一行空标题清楚。
+    if (typeof text !== 'string' || !text.trim()) return document.createComment(title);
     const result = el('section', `explanation-section ${className}`); result.append(el('h3', '', title), el('p', '', text)); return result;
   }
   function renderDetail() {
     const finding = data.findings.find((item) => item.id === state.findingId); if (!finding) return;
-    const heading = el('div', 'detail-heading'); heading.append(tags(finding), el('h2', '', finding.title));
+    const heading = el('div', 'detail-heading'); heading.append(tags(finding), el('h2', '', finding.title || '（标题未提供）'));
     const locations = el('div', 'location-list'); locations.append(el('h3', '', '对应位置'));
-    const unique = finding.locations.filter((loc, index, all) => all.findIndex((other) => other.node === loc.node && other.cut === loc.cut && !!other.associated === !!loc.associated && (!loc.unavailable || other.label === loc.label)) === index);
+    const unique = (finding.locations || []).filter((loc, index, all) => all.findIndex((other) => other.node === loc.node && other.cut === loc.cut && !!other.associated === !!loc.associated && (!loc.unavailable || other.label === loc.label)) === index);
     for (const location of unique) {
       const valid = validLocation(data, location), item = button(locationText(location), () => actions.locate(location), 'location-button');
       item.disabled = !valid;

@@ -60,20 +60,7 @@ namespace EC_SceneAudit.Export
                 "array",
                 "array-set",
                 "array-get",
-                "calc-update",
-                "save",
-                "load",
-                "scan-saves",
-                "save-folder"
-            };
-
-        private static readonly HashSet<string> TrustedPluginCommands =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "save",
-                "load",
-                "scan-saves",
-                "save-folder"
+                "calc-update"
             };
 
         private static readonly HashSet<string> FlowCommands =
@@ -90,6 +77,11 @@ namespace EC_SceneAudit.Export
                 "load-script",
                 "reset-script"
             };
+
+        public static bool IsKnownCommand(string command)
+        {
+            return !string.IsNullOrEmpty(command) && KnownCommands.Contains(command);
+        }
 
         public TextLayoutSnapshot Scan(
             string rawText,
@@ -144,7 +136,7 @@ namespace EC_SceneAudit.Export
                 foreach (Match commandMatch in CommandRegex.Matches(body))
                 {
                     var commandName = commandMatch.Groups["name"].Value;
-                    if (string.Equals(commandName, "script", StringComparison.OrdinalIgnoreCase))
+                    if (!IsKnownCommand(commandName))
                         continue;
 
                     commands.Add(commandName);
@@ -152,9 +144,7 @@ namespace EC_SceneAudit.Export
                     var commandOffset = scriptMatch.Index + bodyStart + 1 + commandMatch.Index;
                     var reference = new ScriptReferenceSnapshot
                     {
-                        kind = TrustedPluginCommands.Contains(commandName)
-                            ? "plugin"
-                            : (FlowCommands.Contains(commandName) ? "flow" : "command"),
+                        kind = FlowCommands.Contains(commandName) ? "flow" : "command",
                         name = commandName,
                         attributes = attributes.ToArray(),
                         sourceOffset = commandOffset,
@@ -167,14 +157,6 @@ namespace EC_SceneAudit.Export
                             warnings)
                     };
                     references.Add(reference);
-
-                    if (!KnownCommands.Contains(commandName))
-                    {
-                        warnings.Add(new SnapshotWarning(
-                            "unknown-command",
-                            "发现未识别的 Variable Mod 命令：" + commandName,
-                            "textOffset:" + commandOffset));
-                    }
                 }
 
                 block.commands = commands.ToArray();
@@ -257,9 +239,6 @@ namespace EC_SceneAudit.Export
             int currentCutCount,
             List<SnapshotWarning> warnings)
         {
-            if (TrustedPluginCommands.Contains(commandName))
-                return "assumed-valid";
-
             if (string.Equals(commandName, "goto-cut", StringComparison.OrdinalIgnoreCase))
             {
                 var index = FindAttribute(attributes, "index");

@@ -17,6 +17,8 @@ internal static class NodePatchRegression
             MissingNodesAndSlots();
             PartialFailuresAndExpansion();
             FileInputAndFormat();
+            CreateConnectionOnEmptySlot();
+            DisconnectExistingConnection();
             Console.WriteLine("PASS: " + assertions + " node patch assertions.");
             return 0;
         }
@@ -140,6 +142,63 @@ internal static class NodePatchRegression
         ExpectFailure(() => NodePatchReader.Parse(json.Replace(@"""after"":{""targetUid"":""C""}", @"""after"":{""targetUid"":""A""}")), "existing self-target format constraint retained");
     }
 
+    private static void CreateConnectionOnEmptySlot()
+    {
+        var host = new Memory();
+        host.Slots["A"][2] = new NodePatchSlotValue(string.Empty, "NotUsed", 0, 0, 0f);
+        var plan = Plan();
+        plan.Connections.Add(new NodeConnectionPatch
+        {
+            SourceUid = "A",
+            Slot = 2,
+            Before = new NodeSlotValue { TargetUid = string.Empty, ConditionType = "NotUsed" },
+            After = new NodeConnectionTarget { TargetUid = "C" }
+        });
+        var report = Engine.Apply(plan, host);
+        Check(report.ConnectionCount == 1 && host.Slots["A"][2].TargetUid == "C", "empty slot accepts new target");
+        Check(string.IsNullOrEmpty(report.Snapshot.Slots[0].Before.TargetUid), "empty slot snapshot records empty target");
+        Check(Engine.Restore(report, host), "empty slot restore allowed");
+        Check(string.IsNullOrEmpty(host.Slots["A"][2].TargetUid), "empty slot restored to empty");
+
+        var json = @"{""format"":""ec-scene-node-patch"",""version"":1,""source"":{""bundleId"":""b"",""manifestSha256"":""" +
+            new string('0', 64) + @"""},""connections"":[{""sourceUid"":""A"",""slot"":2,""before"":{""targetUid"":"""",""conditionType"":""NotUsed"",""conditionCount"":0,""fadeType"":0,""fadeTime"":0},""after"":{""targetUid"":""C""}}]}";
+        Check(NodePatchReader.Parse(json).Connections[0].Before.TargetUid == string.Empty, "empty before accepted by reader");
+        var bothEmpty = @"{""format"":""ec-scene-node-patch"",""version"":1,""source"":{""bundleId"":""b"",""manifestSha256"":""" +
+            new string('0', 64) + @"""},""connections"":[{""sourceUid"":""A"",""slot"":2,""before"":{""targetUid"":"""",""conditionType"":""NotUsed"",""conditionCount"":0,""fadeType"":0,""fadeTime"":0},""after"":{""targetUid"":""""}}]}";
+        ExpectFailure(() => NodePatchReader.Parse(bothEmpty), "both ends empty rejected as no-op");
+    }
+
+    // 已有连接可以设回空槽：应用时走 DisconnectLine，快照仍能恢复原目标。
+    private static void DisconnectExistingConnection()
+    {
+        var host = new Memory();
+        var plan = Plan();
+        plan.Connections.Add(Connection("A", 0, string.Empty));
+        var report = Engine.Apply(plan, host);
+        Check(report.ConnectionCount == 1, "disconnect counts as one applied connection");
+        Check(string.IsNullOrEmpty(host.Slots["A"][0].TargetUid), "disconnect clears the slot target");
+        Check(report.Snapshot.Slots[0].Before.TargetUid == "B", "disconnect snapshot keeps the original target");
+        Check(Engine.Restore(report, host), "disconnect restore allowed");
+        Check(host.Slots["A"][0].TargetUid == "B", "disconnect restore brings the original target back");
+
+        // 已停用的来源槽没有连接可断，不能假装成功。
+        host.Slots["A"][1] = new NodePatchSlotValue(string.Empty, "NotUsed", 0, 0, 0f);
+        host.InactiveSlots.Add("A/1");
+        var inactive = Plan();
+        inactive.Connections.Add(new NodeConnectionPatch
+        {
+            SourceUid = "A", Slot = 1,
+            Before = new NodeSlotValue { TargetUid = string.Empty, ConditionType = "NotUsed" },
+            After = new NodeConnectionTarget { TargetUid = string.Empty }
+        });
+        var failed = Engine.Apply(inactive, host);
+        Check(failed.ConnectionCount == 0 && failed.Issues.Count > 0, "disconnect on an empty source slot is reported");
+
+        var json = @"{""format"":""ec-scene-node-patch"",""version"":1,""source"":{""bundleId"":""b"",""manifestSha256"":""" +
+            new string('0', 64) + @"""},""connections"":[{""sourceUid"":""A"",""slot"":0,""before"":{""targetUid"":""B"",""conditionType"":""ConnectPart"",""conditionCount"":0,""fadeType"":0,""fadeTime"":0},""after"":{""targetUid"":""""}}]}";
+        Check(NodePatchReader.Parse(json).Connections[0].After.TargetUid == string.Empty, "empty after accepted by reader");
+    }
+
     private static NodePatchPlan Plan() => new NodePatchPlan
         { Layout = new NodeLayoutPatch { Canvas = new NodeCanvasValue { Width = 5000, Height = 3000 } } };
     private static NodePlacementPatch Placement(string uid) => new NodePlacementPatch
@@ -205,7 +264,10 @@ internal static class NodePatchRegression
         {
             error = null;
             if (!Slots.ContainsKey(uid) || slot < 0 || slot >= 5 || (!string.IsNullOrEmpty(target) && !Positions.ContainsKey(target))) return false;
+            // 真实宿主对未启用的槽一律拒绝，空目标也一样；这里用 InactiveSlots 表达同一约束。
+            if (InactiveSlots.Contains(uid + "/" + slot)) { error = "slot inactive"; return false; }
             Slots[uid][slot].TargetUid = target; return true;
         }
+        public readonly HashSet<string> InactiveSlots = new HashSet<string>(StringComparer.Ordinal);
     }
 }

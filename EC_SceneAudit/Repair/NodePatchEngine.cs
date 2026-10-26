@@ -85,7 +85,9 @@ namespace EC_SceneAudit.Repair
         private static void ApplyConnection(NodeConnectionPatch connection, INodePatchMemoryHost memory,
             NodePatchSnapshot snapshot, NodePatchApplyReport report)
         {
-            if (!memory.TryReadPlacement(connection.After.TargetUid, out _, out _)
+            // 空 after 表示断开：没有目标节点可查，只校验来源槽。
+            var hasTarget = !string.IsNullOrEmpty(connection.After.TargetUid);
+            if ((hasTarget && !memory.TryReadPlacement(connection.After.TargetUid, out _, out _))
                 || !memory.TryReadSlot(connection.SourceUid, connection.Slot, out var before, out _))
                 return;
             snapshot.Slots.Add(new NodePatchSlotSnapshot

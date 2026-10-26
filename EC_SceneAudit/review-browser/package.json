@@ -8,7 +8,8 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "start": "node scripts/serve.mjs"
+    "start": "node scripts/serve.mjs",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@xmldom/xmldom": "^0.8.11",

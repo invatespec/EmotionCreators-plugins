@@ -33,8 +33,10 @@ function nodePatch(value, source) {
   if (!object(value) || value.format !== 'ec-scene-node-patch' || value.version !== 1 || !Array.isArray(value.connections) ||
       value.source?.bundleId !== source.bundleId || value.source?.manifestSha256 !== source.manifestSha256) fail();
   for (const entry of value.connections) {
+    // after.targetUid 允许为空，表示断开该槽；before 必须非空，否则无可断开的连接。
     if (!object(entry) || !text(entry.sourceUid) || !Number.isInteger(entry.slot) || entry.slot < 0 ||
         !object(entry.before) || !text(entry.before.targetUid) || !object(entry.after) || !text(entry.after.targetUid)) fail();
+    if (!entry.before.targetUid && !entry.after.targetUid) fail();
     for (const key of ['conditionType', 'conditionCount', 'fadeType', 'fadeTime']) if (!Object.hasOwn(entry.before, key)) fail();
   }
   if (value.layout !== undefined) {
@@ -77,11 +79,12 @@ function historyEntry(value) {
   if (value.snapshot.defaults !== undefined && (!object(value.snapshot.defaults) ||
       !['before', 'after'].every(key => [0, 1, 2, 4, 8].includes(value.snapshot.defaults[key])))) fail();
   if (value.snapshot.nodePatch !== undefined) nodePatch(value.snapshot.nodePatch, source);
-  for (const report of [value.report, value.previous]) {
-    if (report === null) continue;
-    if (!object(report) || validateShape('report', report).length ||
-        report.source?.bundleId !== source.bundleId || report.source?.manifestSha256 !== source.manifestSha256) fail();
+  // 历史里的前版可来自更早批次，只核对结构；当前报告仍须属于该条记录的来源资料。
+  if (value.report !== null) {
+    if (!object(value.report) || validateShape('report', value.report).length ||
+        value.report.source?.bundleId !== source.bundleId || value.report.source?.manifestSha256 !== source.manifestSha256) fail();
   }
+  if (value.previous !== null && (!object(value.previous) || validateShape('report', value.previous).length)) fail();
 }
 function pendingEntry(value) {
   fields(value, ['id', 'kind', 'reason', 'source', 'nodeUid', 'status', 'details']);

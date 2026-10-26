@@ -1,0 +1,31 @@
+{
+  "format": "ec-scene-review-report",
+  "version": 1,
+  "reportId": "r3",
+  "supersedesReportId": "r2",
+  "source": {
+    "bundleId": "fixture-1",
+    "manifestSha256": "ee02d3c145c6d694232232597dd83e7e9b30ef2500facc40a5f5dec78778a25a"
+  },
+  "summary": "再次确认撤销，使用精简写法。",
+  "coverage": {
+    "reviewed": [
+      {
+        "fileId": "scene",
+        "kind": "json-pointer",
+        "pointer": "/nodes/0/part/cuts/0/textBoxes/1/layouts/0/scriptBlocks/0/raw"
+      }
+    ],
+    "excluded": [],
+    "limitations": [
+      "没有执行游戏。"
+    ]
+  },
+  "findings": [
+    {
+      "id": "f1",
+      "status": "withdrawn",
+      "revisionReason": "已核对依赖正文，问题不成立。"
+    }
+  ]
+}

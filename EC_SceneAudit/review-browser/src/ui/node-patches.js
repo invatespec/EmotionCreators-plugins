@@ -1,6 +1,6 @@
 import { $, el, button } from './dom.js';
 import { createElement, RotateCcw, LocateFixed } from 'lucide';
-import { assertNodePatchFileSize, emptyNodePatch, validateNodePatch } from '../node-patch.mjs';
+import { assertNodePatchFileSize, emptyNodePatch, usableSlots, validateNodePatch, acceptsLink } from '../node-patch.mjs';
 import { currentTarget } from './connection-edit.mjs';
 
 function download(value, name = 'ec-scene-node-patch.json') {
@@ -14,11 +14,11 @@ function download(value, name = 'ec-scene-node-patch.json') {
 export function mountNodePatches({ data, state, actions, signal, panel }) {
   const dialog = el('dialog', 'node-patch-dialog'); dialog.id = 'node-patch-dialog';
   dialog.setAttribute('aria-labelledby', 'node-patch-title');
-  dialog.innerHTML = `<header><div><h2 id="node-patch-title">节点布局与连接补丁</h2><p>只修改已有连接目标和节点原生位置。</p></div><button id="node-patch-close" type="button" aria-label="关闭节点补丁">×</button></header>
+  dialog.innerHTML = `<header><div><h2 id="node-patch-title">节点布局与连接补丁</h2><p>可修改已有连接目标、给可用空槽指定目标，并调整节点原生位置。</p></div><button id="node-patch-close" type="button" aria-label="关闭节点补丁">×</button></header>
     <div class="node-patch-scroll"><p id="node-patch-source" role="status"></p>
       <section id="node-patch-review" class="node-patch-review" hidden><h3>历史普通自连待复核</h3><p id="node-patch-review-summary"></p><div id="node-patch-review-list"></div><div class="node-patch-review-actions"><button id="node-patch-review-download" type="button">下载原始旧补丁</button><button id="node-patch-review-discard" type="button">丢弃待复核记录</button></div></section>
       <section id="ec-layout-controls"><h3>画布</h3><label>画布大小<select id="ec-canvas-scale" aria-label="画布大小"></select></label></section>
-      <section><h3>已有连接 <span id="node-patch-connection-count" class="muted"></span></h3><div class="node-patch-filters"><select id="node-patch-filter" aria-label="连接范围"><option value="selection">当前选区</option><option value="all">全部连接</option><option value="modified">仅已修改</option></select><input id="node-patch-search" type="search" placeholder="搜索名称或 UID" aria-label="搜索连接"></div><div id="node-patch-connections"></div></section>
+      <section><h3>出口连接 <span id="node-patch-connection-count" class="muted"></span></h3><div class="node-patch-filters"><select id="node-patch-filter" aria-label="连接范围"><option value="selection">当前选区</option><option value="all">全部连接</option><option value="modified">仅已修改</option></select><input id="node-patch-search" type="search" placeholder="搜索名称或 UID" aria-label="搜索连接"></div><div id="node-patch-connections"></div></section>
       <section><h3>位置修改</h3><div id="node-patch-positions"></div></section><section><h3>goto 预览诊断</h3><div id="goto-diagnostics"></div></section>
     </div><footer><p id="node-patch-message" role="status" aria-live="polite"></p><div class="node-patch-resets"><button id="node-patch-restore-connections" type="button">恢复原始连接</button><button id="node-patch-restore-layout" type="button">恢复游戏布局</button><button id="node-patch-clear" type="button">清除全部</button></div><div class="node-patch-files"><label class="node-patch-import">导入补丁<input id="node-patch-import" type="file" accept=".json,application/json"></label><button id="node-patch-export" type="button">导出补丁</button></div></footer>`;
   if (panel) { dialog.classList.add('embedded'); dialog.open = true; panel.page('node-patches').append(dialog); }
@@ -71,15 +71,31 @@ export function mountNodePatches({ data, state, actions, signal, panel }) {
     const select = event.target.closest('select');
     if (!select || !connections.contains(select) || select === expandedTarget) return;
     collapseTargets();
-    const source = select.closest('.node-patch-connection').dataset.source, value = select.value;
+    const row = select.closest('.node-patch-connection'), source = row.dataset.source, value = select.value;
     // 每次只展开正在编辑的一行，避免连接数 × 节点数的 option 常驻。
-    select.replaceChildren(...data.nodes.filter(node => node.id !== source).map(node => new Option(node.name, node.id)));
+    const options = data.nodes.filter(node => node.id !== source && acceptsLink(node)).map(node => new Option(node.name, node.id));
+    // 有连接的槽也能改回空槽，占位项必须在列表里，否则收起后 selectedIndex 变 -1，下拉会显示成空。
+    options.push(new Option('（空槽）', ''));
+    select.replaceChildren(...options);
     select.value = value; expandedTarget = select;
   }
   function changeTarget(event) {
     const select = event.target.closest('select');
     if (!select || !connections.contains(select)) return;
     const { source, slot, original } = select.closest('.node-patch-connection').dataset;
+    // 选中占位项：原本为空的槽撤回该行草稿，原本有连接的槽生成断开项。
+    if (!select.value) {
+      if (original) {
+        const result = actions.setConnectionTarget(source, Number(slot), '');
+        if (result?.ok === false) {
+          message(`修改失败：${result.error}`);
+          select.value = currentTarget(state.nodePatch, source, Number(slot), original);
+        } else message('该出口已设为空槽；应用后游戏内会移除这条连线。');
+        return;
+      }
+      const next = { ...state.nodePatch, connections: state.nodePatch.connections.filter(item => item.sourceUid !== source || item.slot !== Number(slot)) };
+      actions.setNodePatch(next, '恢复单项连接'); message('该连接已恢复，可撤销。'); return;
+    }
     const result = actions.setConnectionTarget(source, Number(slot), select.value);
     if (result?.ok === false) {
       message(`修改失败：${result.error}`);
@@ -97,7 +113,7 @@ export function mountNodePatches({ data, state, actions, signal, panel }) {
   }
   function importDetails(value) {
     const items = patch => [
-      ...patch.connections.map(item => `${nameOf(item.sourceUid)} · 出口 ${item.slot + 1}：${nameOf(item.before.targetUid)} → ${nameOf(item.after.targetUid)}`),
+      ...patch.connections.map(item => `${nameOf(item.sourceUid)} · 出口 ${item.slot + 1}：${item.before.targetUid ? nameOf(item.before.targetUid) : '空'} → ${item.after.targetUid ? nameOf(item.after.targetUid) : '空槽'}`),
       ...(patch.layout?.nodes || []).map(item => `${nameOf(item.uid)}：(${item.before.x}, ${item.before.y}) → (${item.after.x}, ${item.after.y})`)
     ];
     const sections = [
@@ -119,30 +135,39 @@ export function mountNodePatches({ data, state, actions, signal, panel }) {
 
   function renderConnections() {
     const filter = $('node-patch-filter').value;
-    const key = JSON.stringify([filter === 'selection' ? [[...state.selected], state.selectedEdge] : null, filter, $('node-patch-search').value, state.nodePatch.connections]);
+    const key = JSON.stringify([filter, state.selectedEdge, [...state.selected], $('node-patch-search').value, state.nodePatch.connections]);
     if (key === connectionKey) { renderPositions(); return; }
     connectionKey = key;
     collapseTargets();
     const rows = [], inScope = scopeFilter();
-    for (const node of data.nodes) for (const output of node.outputs || []) {
-      if (typeof output.targetUid !== 'string' || !output.targetUid) continue;
-      const targetUid = currentTarget(state.nodePatch, node.id, output.slot, output.targetUid), modified = targetUid !== output.targetUid;
-      if (!inScope(node.id, modified, `${node.name} ${node.id} ${nameOf(output.targetUid)} ${nameOf(targetUid)} ${targetUid}`)) continue;
-      const label = el('label', 'node-patch-connection');
-      label.dataset.source = node.id; label.dataset.slot = output.slot; label.dataset.original = output.targetUid;
-      const info = el('span'); info.append(el('strong', '', `${node.name} · 出口 ${output.slot + 1}`),
-        el('span', 'connection-difference', modified ? `${nameOf(output.targetUid)} → ${nameOf(targetUid)}` : `原目标 ${nameOf(output.targetUid)}`));
-      label.classList.toggle('modified', modified); label.append(info);
-      const select = el('select');
-      if (targetUid !== node.id && names.has(targetUid)) select.add(new Option(nameOf(targetUid), targetUid));
-      select.value = targetUid; select.setAttribute('aria-label', `${node.name} 出口 ${output.slot + 1} 目标`);
-      const tools = el('div', 'patch-row-tools');
-      tools.append(iconButton(LocateFixed, '定位来源节点', () => actions.selectNode(node.id)));
-      const restore = iconButton(RotateCcw, '恢复该连接', () => {
-        const next = { ...state.nodePatch, connections: state.nodePatch.connections.filter(item => item.sourceUid !== node.id || item.slot !== output.slot) };
-        actions.setNodePatch(next, '恢复单项连接'); message('该连接已恢复，可撤销。');
-      }); restore.disabled = !modified; tools.append(restore);
-      label.append(select, tools); rows.push(label);
+    for (const node of data.nodes) {
+      // 已有连接全部列出；空槽只列当前选中节点的可用槽，避免全图铺开。
+      const slots = new Map((node.outputs || []).filter(output => typeof output.targetUid === 'string' && output.targetUid)
+        .map(output => [output.slot, output.targetUid]));
+      if (state.selected.has(node.id)) for (const slot of usableSlots(node)) if (!slots.has(slot)) slots.set(slot, '');
+      for (const [slot, original] of [...slots].sort((a, b) => a[0] - b[0])) {
+        const targetUid = currentTarget(state.nodePatch, node.id, slot, original), modified = targetUid !== original;
+        if (!inScope(node.id, modified, `${node.name} ${node.id} ${nameOf(original)} ${nameOf(targetUid)} ${targetUid}`)) continue;
+        const label = el('label', 'node-patch-connection');
+        label.dataset.source = node.id; label.dataset.slot = slot; label.dataset.original = original;
+        const info = el('span'); info.append(el('strong', '', `${node.name} · 出口 ${slot + 1}`),
+          el('span', 'connection-difference', modified
+            ? `${original ? nameOf(original) : '空'} → ${nameOf(targetUid)}`
+            : original ? `原目标 ${nameOf(original)}` : '空槽，可选择目标'));
+        label.classList.toggle('modified', modified); label.classList.toggle('empty', !original); label.append(info);
+        const select = el('select');
+        if (targetUid !== node.id && names.has(targetUid)) select.add(new Option(nameOf(targetUid), targetUid));
+        // 占位项统一叫「空槽」：原本为空的槽选它是撤回草稿，原本有连接的槽选它是断开。
+        if (!targetUid || original) select.add(new Option('（空槽）', ''));
+        select.value = targetUid; select.setAttribute('aria-label', `${node.name} 出口 ${slot + 1} 目标`);
+        const tools = el('div', 'patch-row-tools');
+        tools.append(iconButton(LocateFixed, '定位来源节点', () => actions.selectNode(node.id)));
+        const restore = iconButton(RotateCcw, '恢复该连接', () => {
+          const next = { ...state.nodePatch, connections: state.nodePatch.connections.filter(item => item.sourceUid !== node.id || item.slot !== slot) };
+          actions.setNodePatch(next, '恢复单项连接'); message('该连接已恢复，可撤销。');
+        }); restore.disabled = !modified; tools.append(restore);
+        label.append(select, tools); rows.push(label);
+      }
     }
     connections.replaceChildren(...rows);
     if (!rows.length) connections.append(el('p', 'muted', filter === 'selection' ? '当前选区没有匹配连接' : '没有匹配连接'));

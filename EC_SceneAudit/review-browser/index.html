@@ -59,7 +59,7 @@
     <p>选择直接包含 bundle.json 的 F8 资料包文件夹。报告可以稍后添加；文件只在本机读取。</p>
     <div class="file-row"><span>资料包目录</span><button id="bundle-pick" type="button">选择文件夹</button><input id="bundle-files" type="file" webkitdirectory multiple hidden></div>
     <div class="file-row"><span>当前报告 JSON(可选)</span><button id="report-pick" type="button">选择文件</button><input id="report-file" type="file" accept=".json,application/json" hidden></div>
-    <div class="file-row"><span>前版报告 JSON(验证修订时使用)</span><button id="previous-pick" type="button">选择文件</button><input id="previous-file" type="file" accept=".json,application/json" hidden></div>
+    <div class="file-row"><span>前版报告 JSON(可以是同一 Scene 的旧导出批次)</span><button id="previous-pick" type="button">选择文件</button><input id="previous-file" type="file" accept=".json,application/json" hidden></div>
     <div class="import-actions"><button id="reload-files" type="button">重新读取所选文件</button><button id="clear-previous" type="button">清除前版</button><button id="clear-report" type="button">清除报告</button></div>
     <p id="load-summary" role="status">尚未选择资料</p><ul id="load-diagnostics"></ul>
     <details id="report-overview" hidden><summary>报告范围与修订</summary><pre id="report-overview-text"></pre></details>

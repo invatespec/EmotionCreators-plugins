@@ -1,6 +1,6 @@
 import { automaticLayout } from './domain.js';
 import { gameLayout } from './game-layout.js';
-import { emptyNodePatch } from '../node-patch.mjs';
+import { emptyNodePatch, createdEdges } from '../node-patch.mjs';
 import { recoverStoredNodePatch } from '../node-patch-recovery.mjs';
 import { ecFrames } from '../ec-layout.mjs';
 import { syncNodePatchLayout } from './layout-state.js';
@@ -41,7 +41,8 @@ export function createState(data, draft = {}) {
   const base = legacySource === 'game' && game ? game : automatic;
   const patch = storedPatch.patch || emptyNodePatch(data);
   let routeOffsets = {};
-  try { routeOffsets = validateRouteOffsets(saved?.routeOffsets, data); } catch { /* 损坏的网页路线不影响游戏补丁与布局恢复。 */ }
+  // 补丁新建的空槽边同样允许保存路线；漏传会让整份草稿路线被丢弃。
+  try { routeOffsets = validateRouteOffsets(saved?.routeOffsets, data, createdEdges(data.baseEdges, patch, data)); } catch { /* 损坏的网页路线不影响游戏补丁与布局恢复。 */ }
   let positions = mergePositions(base.positions, saved && saved.layoutSource !== 'ec' ? saved.positions : null);
   let regions = base.regions;
   let layoutSource = legacySource;

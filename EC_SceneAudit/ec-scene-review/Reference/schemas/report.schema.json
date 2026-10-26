@@ -169,16 +169,41 @@
         "required": [
           "id",
           "status",
-          "severity",
-          "certainty",
-          "title",
-          "locations",
-          "trigger",
-          "evidence",
-          "impact",
-          "recommendation",
           "revisionReason"
         ],
+        "if": {
+          "properties": {
+            "status": {
+              "const": "withdrawn"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "not": {
+            "required": [
+              "replacesFindingIds"
+            ],
+            "properties": {
+              "replacesFindingIds": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "else": {
+          "required": [
+            "severity",
+            "certainty",
+            "title",
+            "locations",
+            "trigger",
+            "evidence",
+            "impact",
+            "recommendation"
+          ]
+        },
         "additionalProperties": false
       }
     }

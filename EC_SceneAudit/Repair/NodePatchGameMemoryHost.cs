@@ -149,8 +149,15 @@ namespace EC_SceneAudit.Repair
                 error = "节点槽位越界：" + sourceUid + "/slot:" + slot;
                 return false;
             }
+            // 空目标表示断开；未启用的槽本就没有连接，直接拒绝以免误判成一次成功写入。
             if (string.IsNullOrEmpty(targetUid))
             {
+                var rects = OutputRectsRef(source);
+                if (rects == null || slot >= rects.Length || rects[slot] == null || !rects[slot].gameObject.activeSelf)
+                {
+                    error = "来源槽位当前不是可用状态：" + sourceUid + "/slot:" + slot;
+                    return false;
+                }
                 source.DisconnectLine(slot);
                 return true;
             }
