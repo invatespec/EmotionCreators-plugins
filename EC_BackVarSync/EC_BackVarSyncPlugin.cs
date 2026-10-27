@@ -16,10 +16,11 @@ namespace EC_BackVarSync
     {
         public const string GUID = "EC_BackVarSync";
         public const string PluginName = "EC_BackVarSync";
-        public const string Version = "1.0.0";
+        public const string Version = "1.1.1";
 
         private static ManualLogSource _log;
         private static VarStore _store;
+        private static PositionJump _jump;
         private static AutoSaveManager _autoSave;
         private static HPlayAdvanceManager _advance;
         private static ChapterPanel _panel;
@@ -63,7 +64,10 @@ namespace EC_BackVarSync
                 new ConfigDescription("自动前进的时间间隔(秒)", new AcceptableValueRange<float>(0.1f, 60f)));
 
             _bridge = new ECBackBridge(Logger, _store);
-            _panel = new ChapterPanel(_store, Logger, () => cfgPanelKey.Value,
+            _jump = new PositionJump(Logger);
+            _autoSave = new AutoSaveManager(_store, _jump, Logger,
+                () => cfgAutoEnabled.Value, () => cfgAutoInterval.Value, () => cfgAutoMinSeconds.Value);
+            _panel = new ChapterPanel(_store, _autoSave, Logger, () => cfgPanelKey.Value,
                 () =>
                 {
                     if (!cfgFollow.Value || !_bridge.TryGetFollowAnchor(out var rect))
@@ -71,8 +75,6 @@ namespace EC_BackVarSync
                     return rect;
                 },
                 cfgX, cfgY, cfgDock);
-            _autoSave = new AutoSaveManager(_store, Logger,
-                () => cfgAutoEnabled.Value, () => cfgAutoInterval.Value, () => cfgAutoMinSeconds.Value);
             _advance = new HPlayAdvanceManager(Logger,
                 () => cfgAdvanceKey.Value,
                 () => cfgAutoToggleKey.Value,
@@ -119,11 +121,13 @@ namespace EC_BackVarSync
                 {
                     _autoSave?.Reset();
                     _advance?.Reset();
+                    _jump?.Cancel("场景已切换");
                     _log?.LogMessage($"检测到场景切换（{_lastSceneTitle} → {sceneTitle}），已重置自动存档状态。");
                 }
                 _lastSceneTitle = sceneTitle;
 
-                _autoSave?.OnCutLoaded(sceneTitle, ___part?.uuId ?? "", ___part?.name ?? "",
+                string partUid = ___part?.uuId ?? "";
+                _autoSave?.OnCutLoaded(sceneTitle, partUid, VarStore.GetPartDisplayName(partUid, ___part?.name),
                     Math.Max(0, ___cutIndex - 1));
                 _advance?.OnCutLoaded(_cut);
             }
@@ -137,9 +141,28 @@ namespace EC_BackVarSync
                 _panel?.TickKey();
                 _autoSave?.Tick();
 
-                // 面板输入框打字时暂停前进键，避免按回车确认输入被游戏吃成前进
-                if (!ChapterPanel.TextEditing)
+                // 面板打字时、自动存档跳转挂起时暂停前进：前者防回车被吃成前进，后者防中间 cut 脚本改写已恢复的变量
+                if (!ChapterPanel.TextEditing && !(_jump?.Armed ?? false))
                     _advance?.Tick();
+            }
+
+            [HarmonyPostfix]
+            [HarmonyAfter("EC_VariableMod", "EC_back")]
+            [HarmonyPriority(Priority.Last)]
+            [HarmonyPatch(typeof(HPlay.HPlayScene), "GetNextUID", new Type[] { typeof(int) })]
+            public static void GetNextUID_Postfix(int _nextPart, ref string __result)
+            {
+                _jump?.OverrideNextUid(_nextPart, ref __result);
+            }
+
+            [HarmonyPrefix]
+            [HarmonyBefore("EC_VariableMod", "EC_back")]
+            [HarmonyPriority(Priority.First)]
+            [HarmonyPatch(typeof(ADV.ADVPlay), "SetPart")]
+            public static bool SetPart_Prefix(ADV.ADVPlay __instance, global::HEdit.ADVPart _part,
+                                              ref global::HEdit.ADVPart ___part, ref int ___cutIndex)
+            {
+                return _jump == null || !_jump.TryTakeOverSetPart(__instance, _part, ref ___part, ref ___cutIndex);
             }
         }
     }

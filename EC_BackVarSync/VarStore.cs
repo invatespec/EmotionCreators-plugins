@@ -23,6 +23,15 @@ namespace EC_BackVarSync
         public string TimeLocal;  // 本地时间，解析失败为 ""
     }
 
+    /// <summary>自动存档摘要（面板底栏显示用，轻量解析）。</summary>
+    public sealed class AutoSaveInfo
+    {
+        public string TimeLocal;  // 本地时间，解析失败为 ""
+        public string PartUid;
+        public string PartName;
+        public int CutIndex;      // 0 基，与 EC_back 显示口径一致
+    }
+
     /// <summary>
     /// 变量存档读写引擎，三类目标：
     /// 章节存档 UserData/PluginData/EC_BackVarSync/chapters|autosave 下；
@@ -30,6 +39,9 @@ namespace EC_BackVarSync
     /// </summary>
     internal sealed class VarStore
     {
+        /// <summary>剧本目录内的场景绑定标记（内容为原始场景标题）；章节/存档列表只扫子目录和 xml，不受影响。</summary>
+        private const string SceneMarkerFile = ".scene";
+
         public string RootDir { get; }
 
         private readonly ManualLogSource _log;
@@ -71,7 +83,7 @@ namespace EC_BackVarSync
                     return false;
 
                 partUid = part.uuId;
-                partName = part.name ?? "";
+                partName = GetPartDisplayName(part.uuId, part.name);
 
                 var advPlay = Singleton<ADVPlay>.Instance;
                 int raw = -1;
@@ -85,6 +97,23 @@ namespace EC_BackVarSync
             {
                 return false;
             }
+        }
+
+        /// <summary>节点画布上的 part 标题；BasePart.name 通常为空，取不到时回退 fallback。</summary>
+        public static string GetPartDisplayName(string partUid, string fallback)
+        {
+            try
+            {
+                var nodeBases = Singleton<HEditData>.Instance?.nodeBases;
+                if (!string.IsNullOrEmpty(partUid) && nodeBases != null
+                    && nodeBases.TryGetValue(partUid, out var node) && !string.IsNullOrEmpty(node?.name))
+                    return node.name;
+            }
+            catch
+            {
+                // 场景数据未就绪时按回退值处理
+            }
+            return fallback ?? "";
         }
 
         #endregion
@@ -155,12 +184,18 @@ namespace EC_BackVarSync
             if (!TryLoadFile(path, out var file))
                 return false;
 
-            if (!_bridge.TryRestore(file.globals, file.arrays))
+            if (!Restore(file))
             {
                 _log.LogError($"变量恢复失败: {path}");
                 return false;
             }
             return true;
+        }
+
+        /// <summary>把已读入内存的存档恢复到 VariableMod（可重复调用）。</summary>
+        public bool Restore(SaveFile file)
+        {
+            return file != null && _bridge.TryRestore(file.globals, file.arrays);
         }
 
         #endregion
@@ -194,6 +229,61 @@ namespace EC_BackVarSync
         {
             return CreateDirSafe(Path.Combine(RootDir, "chapters", SanitizePathSegment(rawName)),
                 rawName, "剧本", out sanitized);
+        }
+
+        /// <summary>
+        /// 确保有绑定该场景的剧本格：先按目录内场景标记查（玩家改名只移动目录，标记随之保留），
+        /// 再认领同名目录，都没有才新建。返回 true 表示本次新建。
+        /// </summary>
+        public bool EnsureScenePlay(string sceneTitle, out string playName)
+        {
+            playName = FindScenePlay(sceneTitle);
+            if (playName != null)
+                return false;
+
+            string name = SanitizePathSegment(sceneTitle);
+            if (string.IsNullOrEmpty(name))
+                return false;
+
+            bool created = !Directory.Exists(PlayDir(name));
+            if (created && !CreatePlay(name, out name))
+                return false;
+
+            WriteSceneMarker(name, sceneTitle);
+            playName = name;
+            return created;
+        }
+
+        private string FindScenePlay(string sceneTitle)
+        {
+            foreach (string play in ListPlays())
+            {
+                string marker = Path.Combine(PlayDir(play), SceneMarkerFile);
+                try
+                {
+                    if (File.Exists(marker) && File.ReadAllText(marker, Encoding.UTF8) == sceneTitle)
+                        return play;
+                }
+                catch
+                {
+                    // 单个标记读取失败不影响其他剧本
+                }
+            }
+            return null;
+        }
+
+        private void WriteSceneMarker(string play, string sceneTitle)
+        {
+            string marker = Path.Combine(PlayDir(play), SceneMarkerFile);
+            try
+            {
+                File.WriteAllText(marker, sceneTitle, new UTF8Encoding(false));
+            }
+            catch (Exception ex)
+            {
+                // 写不进标记只影响改名后的识别（下次会再按同名目录认领），不阻断使用
+                _log.LogWarning($"场景标记写入失败: {marker} : {ex.Message}");
+            }
         }
 
         public List<string> ListChapters(string play)
@@ -445,13 +535,13 @@ namespace EC_BackVarSync
             return SaveTo(AutoSavePath(sceneTitle), sceneTitle, partUid, partName, cutIndex);
         }
 
-        public bool RestoreAuto(string sceneTitle)
+        public bool TryLoadAuto(string sceneTitle, out SaveFile file)
         {
-            return RestoreFrom(AutoSavePath(sceneTitle));
+            return TryLoadFile(AutoSavePath(sceneTitle), out file);
         }
 
-        /// <summary>最近一次自动存档的本地时间，无存档返回 null。</summary>
-        public string GetAutoSaveTime(string sceneTitle)
+        /// <summary>当前场景自动存档摘要，无存档或损坏返回 null。</summary>
+        public AutoSaveInfo GetAutoSaveInfo(string sceneTitle)
         {
             string path = AutoSavePath(sceneTitle);
             if (!File.Exists(path))
@@ -459,7 +549,16 @@ namespace EC_BackVarSync
 
             try
             {
-                return FormatTimestamp(XDocument.Load(path).Root?.Element("timestampUtc")?.Value);
+                var root = XDocument.Load(path).Root;
+                var adv = root?.Element("adv");
+                int.TryParse(adv?.Element("cutIndex")?.Value, out int cut);
+                return new AutoSaveInfo
+                {
+                    TimeLocal = FormatTimestamp(root?.Element("timestampUtc")?.Value) ?? "",
+                    PartUid = adv?.Element("partUID")?.Value ?? "",
+                    PartName = adv?.Element("partName")?.Value ?? "",
+                    CutIndex = cut
+                };
             }
             catch
             {

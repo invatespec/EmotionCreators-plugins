@@ -198,9 +198,10 @@ namespace EC_BackVarSync
 
                     if (a.elemType == VarType.String)
                     {
+                        // 复制行：同一份 SaveFile 会被重复恢复（读自动存档落地后二次恢复），不能与 VariableMod 共享列表
                         var list = new List<List<string>>();
                         foreach (var row in a.values)
-                            list.Add(row?.cells ?? new List<string>());
+                            list.Add(row?.cells != null ? new List<string>(row.cells) : new List<string>());
                         htArrays[a.name] = list;
                     }
                     else if (a.elemType == VarType.Integer)

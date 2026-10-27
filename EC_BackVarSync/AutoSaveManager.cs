@@ -13,10 +13,13 @@ namespace EC_BackVarSync
     /// </summary>
     internal sealed class AutoSaveManager
     {
+        public enum LoadResult { Failed, Busy, VarsOnly, Jumping }
+
         /// <summary>间隔下限（防御性，配置层也用 AcceptableValueRange 限制）。</summary>
         private const int MinIntervalFloor = 5;
 
         private readonly VarStore _store;
+        private readonly PositionJump _jump;
         private readonly ManualLogSource _log;
         private readonly Func<bool> _enabled;
         private readonly Func<int> _intervalCuts;
@@ -35,17 +38,24 @@ namespace EC_BackVarSync
 
         public AutoSaveManager(
             VarStore store,
+            PositionJump jump,
             ManualLogSource log,
             Func<bool> enabled,
             Func<int> intervalCuts,
             Func<float> minSaveSeconds)
         {
             _store = store;
+            _jump = jump;
             _log = log;
             _enabled = enabled;
             _intervalCuts = intervalCuts;
             _minSaveSeconds = minSaveSeconds;
         }
+
+        public bool Enabled => _enabled();
+
+        /// <summary>每次写盘成功自增；面板据此判断底栏摘要是否需要重读。</summary>
+        public int SaveSerial { get; private set; }
 
         /// <summary>
         /// 由 LoadCut_Postfix 调用（快进时高频）。只记账，绝不写盘。
@@ -112,8 +122,44 @@ namespace EC_BackVarSync
             _lastWriteRealtime = now;
             _dirty = false;
 
-            if (!ok)
+            if (ok)
+            {
+                SaveSerial++;
+                _log.LogMessage("已自动存档");
+            }
+            else
                 _log.LogWarning("自动存档写入失败。");
+        }
+
+        /// <summary>
+        /// 读当前场景自动存档：先恢复变量（目标 cut 的脚本/分支按存档变量运行），再跳回存档位置；
+        /// 落地后用同一份快照再恢复一次——快照取自该 cut 脚本执行之后，二次恢复抵消脚本重复执行（如 +1 计数）。
+        /// </summary>
+        public LoadResult Load()
+        {
+            if (_jump.Armed)
+                return LoadResult.Busy;
+
+            string sceneTitle = VarStore.GetSceneTitle();
+            if (!_store.TryLoadAuto(sceneTitle, out SaveFile file) || !_store.Restore(file))
+                return LoadResult.Failed;
+
+            Reset(); // 丢弃待写入：跳转落地前写盘会把旧位置和已恢复的变量配成一份错档
+
+            var adv = file.adv ?? new AdvInfo();
+            bool armed = _jump.TryArm(sceneTitle, adv.partUID, adv.cutIndex, () =>
+            {
+                if (_store.Restore(file))
+                    _log.LogMessage("已读取自动存档");
+                else
+                    _log.LogWarning("自动存档跳转后变量二次恢复失败");
+            });
+
+            if (armed)
+                return LoadResult.Jumping;
+
+            _log.LogMessage("已读取自动存档变量（存档位置在当前场景中不存在，未跳转）");
+            return LoadResult.VarsOnly;
         }
 
         public void Reset()

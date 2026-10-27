@@ -63,8 +63,17 @@ namespace EC_BackVarSync
         private string _confirmDeleteSave = "";  // "章节/存档"
         private Rect? _confirmRect;              // 本帧确认控件区域（MouseDown 撤回判断用）
 
+        private const float StatusSeconds = 8f;
         private string _status = "";
-        private string _autoTimeCache;
+        private float _statusTime = float.NegativeInfinity;
+
+        // 详情页底栏自动存档摘要：写盘序号或场景变化才重读文件
+        private string _autoInfoText = "";
+        private bool _autoInfoExists;
+        private int _autoInfoSerial = -1;
+        private string _autoInfoScene;
+        private string _ensuredScene;               // 本会话已确保过该场景的剧本格（删掉后本会话不重建）
+
         private string _lastSceneTitle = "";
         private bool _dataLoaded;
         private bool _refreshPending;
@@ -73,12 +82,13 @@ namespace EC_BackVarSync
         /// <summary>面板任一输入框持有键盘焦点时为 true（Update 侧据此暂停前进键）。</summary>
         internal static bool TextEditing { get; private set; }
 
-        public ChapterPanel(VarStore store, ManualLogSource log, Func<KeyCode> toggleKey,
+        public ChapterPanel(VarStore store, AutoSaveManager autoSave, ManualLogSource log, Func<KeyCode> toggleKey,
                             Func<Rect?> getFollowAnchor,
                             ConfigEntry<float> cfgX, ConfigEntry<float> cfgY,
                             ConfigEntry<bool> cfgDock)
         {
             Store = store;
+            AutoSave = autoSave;
             Log = log;
             ToggleKey = toggleKey;
             AnchorGetter = getFollowAnchor;
@@ -90,6 +100,7 @@ namespace EC_BackVarSync
         }
 
         private VarStore Store { get; }
+        private AutoSaveManager AutoSave { get; }
         private ManualLogSource Log { get; }
         private Func<KeyCode> ToggleKey { get; }
         private Func<Rect?> AnchorGetter { get; }
@@ -145,7 +156,7 @@ namespace EC_BackVarSync
 
             if (visible && !_lastVisible)
             {
-                _autoTimeCache = Store.GetAutoSaveTime(VarStore.GetSceneTitle());
+                _autoInfoSerial = -1; // 面板隐藏期间可能写过盘，重新显示时重读摘要
                 if (CfgDock.Value && anchorNow)
                 {
                     _windowRect.x = anchor.Value.x;
@@ -164,12 +175,14 @@ namespace EC_BackVarSync
             }
 
             string sceneTitle = VarStore.GetSceneTitle();
+            EnsureAutoSavePlay(sceneTitle);
             if (sceneTitle != _lastSceneTitle || !_dataLoaded)
             {
                 _lastSceneTitle = sceneTitle;
                 _dataLoaded = true;
                 RefreshAll();
             }
+            SyncAutoInfo(sceneTitle);
 
             if (_styles == null)
                 _styles = new PanelStyles();
@@ -411,10 +424,11 @@ namespace EC_BackVarSync
         private void DrawPlayCell(PlayInfo info, Rect cell)
         {
             bool confirming = info.Name == _confirmDeletePlay;
-            // 改名中的剧本格琥珀色高亮
             bool renaming = info.Name == _currentPlay && GUI.GetNameOfFocusedControl() == TfPlay;
+            bool hovered = cell.Contains(Event.current.mousePosition);
             Color bg = confirming ? PanelStyles.DangerColor
                 : renaming ? PanelStyles.RenameColor
+                : hovered ? PanelStyles.HoverColor
                 : PanelStyles.CellColor;
             PanelStyles.Band(cell, bg);
 
@@ -453,13 +467,14 @@ namespace EC_BackVarSync
                 _playNameInput = info.Name;
                 _focusPlayInput = true;
             }
-            if (Btn(new Rect(cell.xMax - 20f, cell.y + 2f, 18f, 18f), "×", null, _styles.Tiny))
+            if (Btn(new Rect(cell.xMax - 20f, cell.y + 2f, 18f, 18f), "×", null, _styles.TinyDanger))
                 _confirmDeletePlay = info.Name;
         }
 
         private void DrawAddPlayCell(Rect cell)
         {
             PanelStyles.Band(cell, PanelStyles.CellColor);
+            PanelStyles.HoverBand(cell);
             if (Btn(new Rect(cell.x + 4f, cell.y + 4f, cell.width - 8f, cell.height - 8f), "+ 新剧本", null, _styles.Cell))
                 CreatePlayAuto();
         }
@@ -467,7 +482,7 @@ namespace EC_BackVarSync
         private void DrawFooterPlays(Rect area)
         {
             GUI.Label(new Rect(area.x, area.y, area.width - 12f, area.height),
-                string.IsNullOrEmpty(_status) ? $"共 {_plays.Count} 个剧本" : _status, _styles.Muted);
+                StatusOr($"共 {_plays.Count} 个剧本"), _styles.Muted);
         }
 
         #endregion
@@ -627,6 +642,8 @@ namespace EC_BackVarSync
             bool selected = row.Chapter == _selectedChapter && _selectedSave.Length == 0;
             if (selected)
                 PanelStyles.Band(area, PanelStyles.SelectedColor);
+            else
+                PanelStyles.HoverBand(area);
 
             bool confirming = row.Chapter == _confirmDeleteChapter;
             if (confirming)
@@ -667,7 +684,7 @@ namespace EC_BackVarSync
                 }
             }
 
-            if (Btn(new Rect(area.xMax - 20f, area.y + 2f, 18f, area.height - 4f), "×", null, _styles.Tiny))
+            if (Btn(new Rect(area.xMax - 20f, area.y + 2f, 18f, area.height - 4f), "×", null, _styles.TinyDanger))
                 _confirmDeleteChapter = confirming ? "" : row.Chapter;
         }
 
@@ -678,6 +695,8 @@ namespace EC_BackVarSync
             bool confirming = key == _confirmDeleteSave;
             if (selected)
                 PanelStyles.Band(area, PanelStyles.SelectedColor);
+            else
+                PanelStyles.HoverBand(area);
             if (confirming)
             {
                 _confirmRect = area;
@@ -719,7 +738,7 @@ namespace EC_BackVarSync
                         }
                         else
                             SetStatus("删除失败，详见日志。");
-                    }))
+                    }, _styles.ButtonDanger))
             {
                 if (!confirming)
                     _confirmDeleteSave = key;
@@ -728,18 +747,29 @@ namespace EC_BackVarSync
 
         private void DrawFooterDetail(Rect area)
         {
-            GUI.Label(new Rect(area.x, area.y, area.width - 100f, area.height), _status, _styles.Muted);
-            Btn(new Rect(area.xMax - 90f, area.y, 90f, area.height), "读取自动存档", () =>
+            GUI.Label(new Rect(area.x, area.y, area.width - 96f, area.height), StatusOr(_autoInfoText), _styles.Muted);
+            GUI.enabled = _autoInfoExists;
+            Btn(new Rect(area.xMax - 90f, area.y, 90f, area.height), "读取自动存档", LoadAutoSave);
+            GUI.enabled = true;
+        }
+
+        private void LoadAutoSave()
+        {
+            switch (AutoSave.Load())
             {
-                string sceneTitle = VarStore.GetSceneTitle();
-                if (Store.RestoreAuto(sceneTitle))
-                {
-                    SetStatus("自动存档已读取（变量已恢复）。");
-                    Log.LogMessage($"自动存档已读取（场景: {sceneTitle}）");
-                }
-                else
+                case AutoSaveManager.LoadResult.Jumping:
+                    SetStatus("已读取自动存档，跳回存档位置。");
+                    break;
+                case AutoSaveManager.LoadResult.VarsOnly:
+                    SetStatus("变量已恢复；存档位置已不存在，未跳转。");
+                    break;
+                case AutoSaveManager.LoadResult.Busy:
+                    SetStatus("正在跳转，请稍候。");
+                    break;
+                default:
                     SetStatus("自动存档读取失败或不存在。");
-            });
+                    break;
+            }
         }
 
         #endregion
@@ -851,8 +881,53 @@ namespace EC_BackVarSync
                     RebuildRows();
                 }
             }
+        }
 
-            _autoTimeCache = Store.GetAutoSaveTime(VarStore.GetSceneTitle());
+        /// <summary>
+        /// 开启自动存档时确保有绑定当前场景的剧本格（读取自动存档需先进入一个剧本）。
+        /// 每个场景每次会话只确保一次：玩家删掉后本次不重建；改名后按场景标记沿用，不另建。
+        /// </summary>
+        private void EnsureAutoSavePlay(string sceneTitle)
+        {
+            if (!AutoSave.Enabled)
+            {
+                _ensuredScene = null; // 关掉再开时重新确保
+                return;
+            }
+            if (string.IsNullOrEmpty(sceneTitle) || sceneTitle == _ensuredScene)
+                return;
+
+            _ensuredScene = sceneTitle;
+            if (Store.EnsureScenePlay(sceneTitle, out string created))
+            {
+                _dataLoaded = false; // 本帧随后整体刷新列表
+                Log.LogInfo($"已按场景标题创建自动存档剧本格: {created}");
+            }
+        }
+
+        /// <summary>写盘序号或场景变化时重读自动存档摘要（时间 · cut · part）。</summary>
+        private void SyncAutoInfo(string sceneTitle)
+        {
+            if (_autoInfoSerial == AutoSave.SaveSerial && _autoInfoScene == sceneTitle)
+                return;
+
+            _autoInfoSerial = AutoSave.SaveSerial;
+            _autoInfoScene = sceneTitle;
+
+            AutoSaveInfo info = Store.GetAutoSaveInfo(sceneTitle);
+            _autoInfoExists = info != null;
+            if (info == null)
+            {
+                _autoInfoText = "暂无自动存档";
+                return;
+            }
+
+            string part = VarStore.GetPartDisplayName(info.PartUid, info.PartName);
+            if (part.Length == 0)
+                part = info.PartUid;
+            if (part.Length > 12)
+                part = part.Substring(0, 12) + "..";
+            _autoInfoText = $"{ShortTime(info.TimeLocal)} · cut {info.CutIndex} · {part}";
         }
 
         private bool HasPlay(string play)
@@ -948,6 +1023,14 @@ namespace EC_BackVarSync
         private void SetStatus(string text)
         {
             _status = text;
+            _statusTime = Time.realtimeSinceStartup;
+        }
+
+        /// <summary>操作短状态 8 秒后过期，回落到 fallback（旧提示留着会误导下一次操作）。</summary>
+        private string StatusOr(string fallback)
+        {
+            bool fresh = _status.Length > 0 && Time.realtimeSinceStartup - _statusTime < StatusSeconds;
+            return fresh ? _status : fallback;
         }
 
         /// <summary>按归一化位置与当前分辨率重算窗口矩形（对齐 EC_LogFilter 的防溢出方案）。</summary>
@@ -996,18 +1079,27 @@ namespace EC_BackVarSync
             internal static readonly Color TreeBgColor = new Color(0.12f, 0.14f, 0.18f, 1f);
             internal static readonly Color SelectedColor = new Color(0.19f, 0.30f, 0.43f, 1f);
             internal static readonly Color CellColor = new Color(0.15f, 0.18f, 0.24f, 1f);
+            internal static readonly Color HoverColor = new Color(0.21f, 0.26f, 0.34f, 1f);
             internal static readonly Color DangerColor = new Color(0.32f, 0.13f, 0.13f, 1f);
-            internal static readonly Color RenameColor = new Color(0.34f, 0.27f, 0.11f, 1f);
+            internal static readonly Color RenameColor = new Color(0.13f, 0.38f, 0.36f, 1f);
+
+            private static readonly Color HoverTextColor = new Color(0.72f, 0.88f, 1f);
+            private static readonly Color BtnHoverBg = new Color(0.74f, 0.85f, 0.98f);
+            private static readonly Color BtnActiveBg = new Color(0.48f, 0.66f, 0.90f);
+            private static readonly Color DangerHoverBg = new Color(0.86f, 0.36f, 0.33f);
+            private static readonly Color DangerActiveBg = new Color(0.66f, 0.22f, 0.20f);
 
             internal readonly GUIStyle Window = new GUIStyle();
             internal readonly GUIStyle Title;
             internal readonly GUIStyle Label;
             internal readonly GUIStyle Muted;
             internal readonly GUIStyle Button;
+            internal readonly GUIStyle ButtonDanger;
             internal readonly GUIStyle Row;
             internal readonly GUIStyle Chapter;
             internal readonly GUIStyle Text;
             internal readonly GUIStyle Tiny;
+            internal readonly GUIStyle TinyDanger;
             internal readonly GUIStyle Cell;
             internal readonly GUIStyle CellDanger;
             internal readonly GUIStyle Slider = new GUIStyle();
@@ -1030,13 +1122,13 @@ namespace EC_BackVarSync
                     hover = { textColor = new Color(0.62f, 0.67f, 0.74f) }
                 };
                 Title = new GUIStyle(Label) { fontSize = 13, fontStyle = FontStyle.Bold };
-                Row = new GUIStyle(Label) { hover = { textColor = new Color(1f, 0.85f, 0.4f) } };
+                Row = new GUIStyle(Label) { hover = { textColor = HoverTextColor } };
                 Chapter = new GUIStyle(Row) { fontSize = 14 };
                 Cell = new GUIStyle(Label)
                 {
                     alignment = TextAnchor.MiddleCenter,
                     wordWrap = false,
-                    hover = { textColor = new Color(1f, 0.85f, 0.4f) }
+                    hover = { textColor = HoverTextColor }
                 };
                 CellDanger = new GUIStyle(Cell)
                 {
@@ -1051,12 +1143,38 @@ namespace EC_BackVarSync
                     border = new RectOffset()
                 };
                 Paint(Button, true);
+                Tint(Button, BtnHoverBg, BtnActiveBg, null);
+                ButtonDanger = new GUIStyle(Button);
+                Tint(ButtonDanger, DangerHoverBg, DangerActiveBg, Color.white);
                 // 输入框底用浅灰而非纯白：光标颜色继承全局皮肤，浅灰底保证黑/白光标均可见
                 Text = new GUIStyle(GUI.skin.textField) { fontSize = 12 };
                 Paint(Text, true, new Color(0.90f, 0.91f, 0.93f));
                 Tiny = new GUIStyle(Button) { fontSize = 10, padding = new RectOffset(0, 0, 0, 0) };
+                TinyDanger = new GUIStyle(Tiny);
+                Tint(TinyDanger, DangerHoverBg, DangerActiveBg, Color.white);
                 Thumb.fixedHeight = 14f;
                 Paint(Thumb, true);
+                Tint(Thumb, BtnHoverBg, BtnActiveBg, null);
+            }
+
+            /// <summary>悬停/按下底色（含 on* 状态）；normal 保持 Paint 的白底。</summary>
+            private static void Tint(GUIStyle style, Color hoverBg, Color activeBg, Color? text)
+            {
+                Texture2D hover = MakeTexture(hoverBg);
+                Texture2D active = MakeTexture(activeBg);
+                style.hover.background = style.onHover.background = hover;
+                style.active.background = style.onActive.background = active;
+                if (!text.HasValue)
+                    return;
+                style.hover.textColor = style.onHover.textColor = text.Value;
+                style.active.textColor = style.onActive.textColor = text.Value;
+            }
+
+            /// <summary>透明文字按钮（格子/树行）的悬停底带；mouse 为窗口内坐标。</summary>
+            internal static void HoverBand(Rect rect)
+            {
+                if (rect.Contains(Event.current.mousePosition))
+                    Band(rect, HoverColor);
             }
 
             private static void Paint(GUIStyle style, bool background, Color? bgTint = null)

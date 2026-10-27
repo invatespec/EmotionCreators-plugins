@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using ADV;
 using BepInEx.Logging;
 using HarmonyLib;
@@ -11,13 +12,12 @@ using UnityEngine;
 namespace EC_BackVarSync
 {
     /// <summary>
-    /// HPlay 前进控制器：自定义按键前进 + 自动前进。（移植自 EC_VariableMod_SaveLoad，行为不变）
+    /// HPlay 前进控制器：自定义按键前进 + 自动前进。
     ///
-    /// 不复刻游戏原生 ADVPlay.OnClick/Check 的反射调用（私有方法在玩家游戏版本中可能因
-    /// 内联/重命名/混淆而反射失败），改用 public 状态自构守卫，仅 cutIndex/isSelect
-    /// 两个私有字段仍用 Traverse 反射（字段元数据稳定性远高于方法）。
+    /// 前进必须走原生 ADVPlay.OnClick：VariableMod 的 event-next/goto-cut 等挂在它的 Prefix 上，
+    /// 直接调 NextCut 会让这些脚本静默不执行。OnClick 解析不到时才退回复刻分支。
     ///
-    /// 自动前进故意忽略 Check() 的「文本隐藏点击」(TextHideClick)条件：游戏默认关闭该项，
+    /// 守卫自构而不调 Check()：Check() 含「文本隐藏点击」(TextHideClick)条件，游戏默认关闭，
     /// 原生点击会因文本未隐藏而无限期卡住；本控制器只在出现选项分支(isSelect)时停下。
     /// </summary>
     internal sealed class HPlayAdvanceManager
@@ -29,6 +29,7 @@ namespace EC_BackVarSync
         private readonly Func<float> _getAutoInterval;
         private readonly Action<bool> _setAutoEnabled;
 
+        private readonly MethodInfo _onClick;
         private float _autoAccumulator;
         private readonly List<TypefaceAnimatorEx> _textAnimations = new List<TypefaceAnimatorEx>();
 
@@ -46,6 +47,10 @@ namespace EC_BackVarSync
             _getAutoEnabled = getAutoEnabled;
             _getAutoInterval = getAutoInterval;
             _setAutoEnabled = setAutoEnabled;
+
+            _onClick = AccessTools.Method(typeof(ADVPlay), "OnClick", Type.EmptyTypes);
+            if (_onClick == null)
+                _log.LogWarning("未找到 ADVPlay.OnClick，前进键改用复刻分支：VariableMod 的 event-next 跳转不会执行。");
         }
 
         /// <summary>由 HPlayScene.Update 每帧调用。</summary>
@@ -253,9 +258,8 @@ namespace EC_BackVarSync
         }
 
         /// <summary>
-        /// 复刻 ADVPlay.OnClick() 的完整分支：
-        ///   最后一个 CUT 且非选项分支 → 切换到下一个 PART（nextPart=0），
-        ///   否则切到下一个 CUT。
+        /// 等同一次原生点击：选项分支显示时不动，其余交给 ADVPlay.OnClick。
+        /// OnClick 不可用时复刻其分支：末尾 CUT → 下一个 PART（nextPart=0），否则 NextCut。
         /// </summary>
         private void Advance()
         {
@@ -267,19 +271,25 @@ namespace EC_BackVarSync
             if (advpart == null || advpart.cuts == null)
                 return;
 
-            // 反射读 cutIndex / isSelect（私有字段）。失败则放弃本次前进，绝不越界。
+            // cutIndex 读取失败返回 -1，按非末尾 CUT 处理
             int cutIndex = ReadField<int>(advPlay, "cutIndex", -1);
             bool isSelect = ReadField<bool>(advPlay, "isSelect", false);
-
             bool isLastCut = advpart.cuts.Count <= cutIndex;
+
+            // 选项分支(isSelect)显示时不动，等玩家选择
+            if (isLastCut && isSelect)
+                return;
+
+            if (_onClick != null)
+            {
+                _onClick.Invoke(advPlay, null);
+                return;
+            }
+
             if (isLastCut)
             {
-                // 选项分支(isSelect)显示时不动，等玩家选择
-                if (!isSelect)
-                {
-                    Singleton<HPlayData>.Instance.isNextPart = true;
-                    Singleton<HPlayData>.Instance.nextPart = 0;
-                }
+                Singleton<HPlayData>.Instance.isNextPart = true;
+                Singleton<HPlayData>.Instance.nextPart = 0;
             }
             else
             {
