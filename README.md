@@ -25,6 +25,8 @@ Focused on HEdit authoring QoL, ADV playback tooling, lighting, and memory fixes
 | **[EC_SceneExport](EC_SceneExport/)** | 1.2.1 | Export / import HEdit parts as `.part` files (and scene link data). Based on monophony’s Scene Export; hotkeys configurable (default Alt+E / Alt+I). |
 | **[EC_ADVCameraViewport](EC_ADVCameraViewport/)** | 2.0.0 | Shrinks the ADV camera viewport so UI doesn’t cover the scene; syncs ADV canvas, auto-repositions Chara State panel, and shrinks the list panel. Toggle with `F8`. |
 | **[EC_ItemParentPreserve](EC_ItemParentPreserve/)** | 1.0.0 | Keeps an ADV item’s world position and rotation when you change its parent (none / character root / left or right hand). Toggle button next to the Transform gizmo button. |
+| **[EC_ADVBatchTransform](EC_ADVBatchTransform/)** | 1.1.0 | Multi-select text bubbles and screen effects in the ADV Part editor (Shift+click a range, Ctrl+click to toggle), then move with arrow keys, rotate with Alt+←/→ or D+drag, and resize by ratio together. `G` toggles each object's own center / group center; group layer up/down; `Tab` / `Shift+Tab` steps through objects. Panel fields (position, angle, size, outline, colors) apply to every selected object. `Ctrl+Z` undoes plugin changes and native edits: single-object drags, panel inputs, row swaps, add/duplicate/delete. Writes only native data fields. |
+| **[EC_MapLimitUnlock](EC_MapLimitUnlock/)** | 1.0.0 | Raises the HEdit scene map limit from 21 to 99. Only the “add map” button check is patched; scene file format and version stay unchanged, so scenes within the vanilla limit still open without the plugin. |
 
 ### Playback / Story
 
