@@ -124,6 +124,21 @@ namespace EC_ADVBatchTransform
             if (so != null && members.Remove(so)) listDirty = true;
         }
 
+        // 批量复制后整组换成新副本，主对象取最后一个副本
+        internal static void SelectGroup(IReadOnlyList<SortOrder> group)
+        {
+            DeselectAllExcept(null);
+            members.Clear();
+            foreach (var so in group)
+                if (EditorContext.HasCtrl(so)) members.Add(so);
+            var last = members.Count > 0 ? members[members.Count - 1] : null;
+            var ui = EditorContext.UI;
+            if (ui != null) ui.sortOrder = last;
+            lastPrimary = last;
+            anchor = last;
+            listDirty = true;
+        }
+
         private static void Add(SortOrder so)
         {
             var primary = EditorContext.Primary;

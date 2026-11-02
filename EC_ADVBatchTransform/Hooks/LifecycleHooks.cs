@@ -107,6 +107,7 @@ namespace EC_ADVBatchTransform.Hooks
         // 必须在原生把对象移出列表之前记，删除后才判不出旧图层
         private static void OnDelete(SortOrder so)
         {
+            if (BatchEdit.SuppressRecords) return;
             if (UndoStack.Executing || !EditorContext.InTextEffectPage || so == null) return;
             if (!InCut(so)) return;
             var list = EditorContext.List;
@@ -116,6 +117,8 @@ namespace EC_ADVBatchTransform.Hooks
 
         private static void OnAdd(SortOrder so, Transform result)
         {
+            // 批量复制已由 BatchSpawnEntry 整体记录
+            if (BatchEdit.SuppressRecords) return;
             // 换样式：同一实例原本就在列表里，不算新增
             if (wasInCut || result == null || UndoStack.Executing || !EditorContext.InTextEffectPage) return;
             UndoStack.Push(new SpawnEntry(so));

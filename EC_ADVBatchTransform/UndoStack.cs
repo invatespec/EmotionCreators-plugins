@@ -495,4 +495,79 @@ namespace EC_ADVBatchTransform
             list.UpdateUI();
         }
     }
+
+    // 批量删除：一次 Ctrl+Z 把整组对象按原顺序放回
+    internal sealed class BatchDeleteEntry : UndoEntry
+    {
+        private readonly List<SortOrder> targets;
+        private readonly List<SortOrder> order;
+
+        internal BatchDeleteEntry(List<SortOrder> targets, List<SortOrder> order)
+        {
+            this.targets = new List<SortOrder>(targets);
+            this.order = new List<SortOrder>(order);
+        }
+
+        internal override void Restore()
+        {
+            foreach (var so in targets)
+                if (!EditorContext.HasCtrl(so)) SpawnEntry.AddNative(so);
+            var list = EditorContext.List;
+            if (list == null) return;
+            // 新增会把序号写成列表长度，可能重复；先按删除前的整表顺序重排（期间新加的对象留在末尾），
+            // 再连续重编号，最后 Sort() 让画布兄弟顺序跟上
+            var now = list.lstUI;
+            var ordered = new List<SortOrder>(now.Count);
+            foreach (var so in order)
+                if (now.Contains(so)) ordered.Add(so);
+            foreach (var so in now)
+                if (!ordered.Contains(so)) ordered.Add(so);
+            now.Clear();
+            now.AddRange(ordered);
+            for (int i = 0; i < now.Count; i++) now[i].sortOrder = i;
+            list.Sort();
+            list.UpdateUI();
+        }
+    }
+    // 批量复制：一次 Ctrl+Z 删掉整组副本，并把选中还原到复制前的对象
+    internal sealed class BatchSpawnEntry : UndoEntry
+    {
+        private readonly List<SortOrder> copies;
+        private readonly List<SortOrder> sources;
+
+        internal BatchSpawnEntry(List<SortOrder> copies, List<SortOrder> sources)
+        {
+            this.copies = new List<SortOrder>(copies);
+            this.sources = new List<SortOrder>(sources);
+        }
+
+        internal override void Restore()
+        {
+            // 先清主对象：副本被删后 sortOrder 还指着它会留下悬空引用
+            var ui = EditorContext.UI;
+            if (ui != null && copies.Contains(ui.sortOrder)) ui.sortOrder = null;
+            foreach (var so in copies)
+            {
+                if (!EditorContext.HasCtrl(so)) continue;
+                MultiSelection.Drop(so);
+                SpawnEntry.DeleteNative(so);
+            }
+            var list = EditorContext.List;
+            if (list != null)
+            {
+                BatchEdit.Renumber(list);
+                list.UpdateUI();
+            }
+            // 选中回到复制前的对象，与“撤销一次整体还原”一致
+            var alive = new List<SortOrder>();
+            foreach (var so in sources)
+                if (EditorContext.HasCtrl(so)) alive.Add(so);
+            if (alive.Count > 0) MultiSelection.SelectGroup(alive);
+            else
+            {
+                var primary = EditorContext.UI;
+                if (primary != null) primary.sortOrder = null;
+            }
+        }
+    }
 }

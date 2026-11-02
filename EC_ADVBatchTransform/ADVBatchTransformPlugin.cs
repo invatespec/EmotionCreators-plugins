@@ -19,7 +19,7 @@ namespace EC_ADVBatchTransform
     {
         public const string PluginGuid = "com.rainbowing.ec.advbatchtransform";
         public const string PluginName = "EC_ADVBatchTransform";
-        public const string PluginVersion = "1.1.0";
+        public const string PluginVersion = "1.2.0";
 
         internal static ManualLogSource Log;
 
@@ -46,6 +46,7 @@ namespace EC_ADVBatchTransform
             harmony.PatchAll(typeof(Hooks.PartHooks));
             harmony.PatchAll(typeof(Hooks.PanelHooks));
             harmony.PatchAll(typeof(Hooks.LifecycleHooks));
+            harmony.PatchAll(typeof(Hooks.ListButtonHooks));
 
             Log.LogInfo(PluginName + " " + PluginVersion + " 已启动");
         }
