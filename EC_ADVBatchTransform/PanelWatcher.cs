@@ -17,40 +17,55 @@ namespace EC_ADVBatchTransform
         };
         private static readonly PropField[] SlotFields =
         {
-            PropField.SlotRot, PropField.SlotColor, PropField.SlotOutlineColor, PropField.SlotOutlineSpread
+            PropField.SlotMsg, PropField.SlotFont, PropField.SlotFontSize, PropField.SlotLineSpacing,
+            PropField.SlotAnime, PropField.SlotTextDir, PropField.SlotAutoLine,
+            PropField.SlotEffect, PropField.SlotOutlineColor, PropField.SlotOutlineSpread,
+            PropField.SlotTop, PropField.SlotBottom, PropField.SlotLeft, PropField.SlotRight,
+            PropField.SlotRot, PropField.SlotColor
         };
 
-        private static readonly Dictionary<PropField, PropValue> baseline = new Dictionary<PropField, PropValue>();
-        private static PropTarget lastTarget;
-        private static int lastVersion = -1;
-        private static bool hasBase;
+        // 根目标与槽位目标各存一份基线：槽位打开期间本体字段仍可改，
+        // 只跟踪当前目标会让另一侧的变化推迟到切目标时才补记，回放顺序被打乱
+        private sealed class Track
+        {
+            internal readonly PropTarget Target;
+            internal readonly Dictionary<PropField, PropValue> Baseline = new Dictionary<PropField, PropValue>();
 
-        internal static void Invalidate() => hasBase = false;
+            internal Track(PropTarget target) => Target = target;
+        }
+
+        private static Track rootTrack;
+        private static Track slotTrack;
+        private static int lastVersion = -1;
+
+        internal static void Invalidate()
+        {
+            rootTrack = null;
+            slotTrack = null;
+        }
+
+        // 任何会改写数据或有其他记录要入栈的动作之前调用：把两条轨道的待提交改动落栈。
+        // 直接 Invalidate 会把基线和改动一起丢掉，输入框打完字的改动就此消失
+        internal static void Flush()
+        {
+            if (rootTrack != null) Commit(rootTrack);
+            if (slotTrack != null) Commit(slotTrack);
+        }
 
         internal static void Tick()
         {
             if (!EditorContext.InTextEffectPage)
             {
-                hasBase = false;
+                Invalidate();
                 return;
             }
-            // 按住鼠标期间是拖动（对象拖动、滑条、颜色拾取），松开后一次性比较，
+            // 按住鼠标期间是拖动（对象拖动、滑条、颜色拾取、输入框拖动改值），松开后一次性比较，
             // 避免逐帧写入各记一条，也避免和拖动记录重复
             if (Input.GetMouseButton(0)) return;
-            var target = PropTarget.For(EditorContext.Primary, EditorContext.ActiveSlot);
-            if (target == null || VersionChanged())
-            {
-                hasBase = false;
-                return;
-            }
-            if (!hasBase || !target.SameAs(lastTarget))
-            {
-                hasBase = true;
-                lastTarget = target;
-                Baseline(target);
-                return;
-            }
-            Detect(target);
+            // 文本输入框内每敲一个字都改一次数据，逐帧比对会一个字一条记录；
+            // 文本改动由 TextHistory 记录，失焦后再整体比对（接管失败时 SlotMsg 兜底）
+            if (EditorContext.IsTyping) return;
+            if (!VersionChanged()) Detect();
         }
 
         // 撤销回放后数据被整体改写，必须重建基线
@@ -58,52 +73,79 @@ namespace EC_ADVBatchTransform
         {
             if (lastVersion == UndoStack.Version) return false;
             lastVersion = UndoStack.Version;
+            Invalidate();
             return true;
         }
 
-        private static void Baseline(PropTarget t)
+        private static void Detect()
         {
-            baseline.Clear();
-            foreach (var field in Fields(t)) baseline[field] = PropWriter.Read(t, field);
+            var primary = EditorContext.Primary;
+            int slot = EditorContext.ActiveSlot;
+            var root = PropTarget.Root(primary);
+            var slotTarget = slot >= 0 ? PropTarget.For(primary, slot) : null;
+
+            rootTrack = Sync(rootTrack, root, RootFields);
+            slotTrack = Sync(slotTrack, slotTarget, SlotFields);
         }
 
-        private static PropField[] Fields(PropTarget t) => t.Slot >= 0 ? SlotFields : RootFields;
+        // 目标变化时按新目标重建基线；目标不变时比较并提交变化
+        private static Track Sync(Track track, PropTarget target, PropField[] fields)
+        {
+            if (target == null)
+            {
+                if (track != null) Commit(track);
+                return null;
+            }
+            if (track == null || !track.Target.SameAs(target))
+            {
+                if (track != null) Commit(track);
+                var fresh = new Track(target);
+                foreach (var field in fields) fresh.Baseline[field] = PropWriter.Read(target, field);
+                return fresh;
+            }
+            Compare(track, fields);
+            return track;
+        }
 
-        private static void Detect(PropTarget target)
+        // 提交前把该目标残余的变化记完，避免切目标时最后一段编辑丢掉。
+        // 没有变化时把暂存号丢掉，否则它会留到下一次无关编辑上把序号取早
+        private static void Commit(Track track)
+        {
+            if (track != null) Compare(track, track.Target.Slot >= 0 ? SlotFields : RootFields);
+        }
+
+        private static bool Compare(Track track, PropField[] fields)
         {
             var changed = new List<PropEntry>();
-            foreach (var field in Fields(target))
+            foreach (var field in fields)
             {
-                if (!baseline.TryGetValue(field, out var old)) continue;
-                var now = PropWriter.Read(target, field);
+                if (!track.Baseline.TryGetValue(field, out var old)) continue;
+                var now = PropWriter.Read(track.Target, field);
                 if (!Differs(field, old, now)) continue;
-                changed.Add(new PropEntry(field, target, old, now));
-                baseline[field] = now;
+                changed.Add(new PropEntry(field, track.Target, old, now));
+                track.Baseline[field] = now;
             }
-            if (changed.Count == 0) return;
-            if (target.Slot < 0) Batch(changed);
-            // 一律用整组条目，回放后统一刷新一次面板
-            UndoStack.Push(new PropBatch(changed.ToArray()));
-        }
-
-        private static bool Differs(PropField field, PropValue old, PropValue now)
-        {
-            switch (field)
+            bool slot = track.Target.Slot >= 0;
+            if (changed.Count == 0)
             {
-                case PropField.Color:
-                case PropField.OutlineColor:
-                case PropField.SlotColor:
-                case PropField.SlotOutlineColor:
-                    return now.Color != old.Color;
-                default:
-                    return !Mathf.Approximately(now.Float, old.Float);
+                // 点了输入框却没改值：取过的号必须丢掉，否则会粘到下一次编辑上把序号取早
+                ActionClock.Discard(slot ? ActionScope.Slot : ActionScope.Root);
+                return false;
             }
+            if (!slot) Batch(changed);
+            // 序号取发起时刻：拖动/打字期间比对被暂停，改动会在之后才被发现
+            var entry = new PropBatch(changed.ToArray())
+            {
+                Sequence = ActionClock.Take(slot ? ActionScope.Slot : ActionScope.Root)
+            };
+            UndoStack.Push(entry);
+            return true;
         }
 
-        // 多选且没点开槽位时，把主对象的新值写到其他成员
+        // 多选且没点开槽位时，把主对象的新值写到其他成员，并与主对象条目合成同一步
         private static void Batch(List<PropEntry> changed)
         {
-            if (!EditorContext.CanOperate || !MultiSelection.IsMulti || EditorContext.ActiveSlot >= 0) return;
+            if (!EditorContext.CanOperate || !MultiSelection.IsMulti) return;
             var primary = EditorContext.Primary;
             var members = MultiSelection.Members;
             var source = changed.ToArray();
@@ -120,6 +162,31 @@ namespace EC_ADVBatchTransform
                 }
             }
             Items.RefreshPrimaryPanel();
+        }
+
+        private static bool Differs(PropField field, PropValue old, PropValue now)
+        {
+            switch (field)
+            {
+                case PropField.Color:
+                case PropField.OutlineColor:
+                case PropField.SlotColor:
+                case PropField.SlotOutlineColor:
+                    return now.Color != old.Color;
+                case PropField.SlotMsg:
+                    // 文本由 TextHistory 记录；接管失败时退回面板比对，避免文本完全不可撤销
+                    return !TextHistory.Attached && now.Text != old.Text;
+                case PropField.SlotFont:
+                case PropField.SlotFontSize:
+                case PropField.SlotTextDir:
+                case PropField.SlotEffect:
+                    return now.Int != old.Int;
+                case PropField.SlotAnime:
+                case PropField.SlotAutoLine:
+                    return now.Bool != old.Bool;
+                default:
+                    return !Mathf.Approximately(now.Float, old.Float);
+            }
         }
     }
 }

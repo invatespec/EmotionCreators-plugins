@@ -37,7 +37,12 @@ namespace EC_ADVBatchTransform.Hooks
                 if (ctrl == null || ctrl.gameObject == null) continue;
                 var root = ctrl.gameObject.transform;
                 if (t != root && !t.IsChildOf(root)) continue;
-                if (OnTop(root)) EditRecorder.BeginDrag(pair.Key);
+                if (OnTop(root))
+                {
+                    // 拖动会改写数据，先把面板里未提交的输入落栈；序号在 BeginDrag 里按按下时刻取
+                    PanelWatcher.Flush();
+                    EditRecorder.BeginDrag(pair.Key);
+                }
                 return;
             }
         }

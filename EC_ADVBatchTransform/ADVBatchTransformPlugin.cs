@@ -19,12 +19,13 @@ namespace EC_ADVBatchTransform
     {
         public const string PluginGuid = "com.rainbowing.ec.advbatchtransform";
         public const string PluginName = "EC_ADVBatchTransform";
-        public const string PluginVersion = "1.2.0";
+        public const string PluginVersion = "1.4.1";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<KeyboardShortcut> PivotToggleKey;
         internal static ConfigEntry<KeyboardShortcut> UndoKey;
+        internal static ConfigEntry<KeyboardShortcut> RedoKey;
         internal static ConfigEntry<KeyboardShortcut> CycleNextKey;
         internal static ConfigEntry<KeyboardShortcut> CyclePrevKey;
         internal static ConfigEntry<float> MoveStep;
@@ -47,6 +48,7 @@ namespace EC_ADVBatchTransform
             harmony.PatchAll(typeof(Hooks.PanelHooks));
             harmony.PatchAll(typeof(Hooks.LifecycleHooks));
             harmony.PatchAll(typeof(Hooks.ListButtonHooks));
+            harmony.PatchAll(typeof(Hooks.InputFieldHooks));
 
             Log.LogInfo(PluginName + " " + PluginVersion + " 已启动");
         }
@@ -57,6 +59,8 @@ namespace EC_ADVBatchTransform
                 "切换旋转/缩放中心：各自中心或整组中心");
             UndoKey = Config.Bind("Keys", "Undo", new KeyboardShortcut(KeyCode.Z, KeyCode.LeftControl),
                 "撤销最近一次调整，含原生操作");
+            RedoKey = Config.Bind("Keys", "Redo", new KeyboardShortcut(KeyCode.Y, KeyCode.LeftControl),
+                "重做刚撤销的调整；误按撤销后靠它找回");
             CycleNextKey = Config.Bind("Keys", "CycleNext", new KeyboardShortcut(KeyCode.Tab),
                 "选中列表里的下一个对象；多选时不生效");
             CyclePrevKey = Config.Bind("Keys", "CyclePrev", new KeyboardShortcut(KeyCode.Tab, KeyCode.LeftShift),
@@ -88,6 +92,19 @@ namespace EC_ADVBatchTransform
                 // 同一异常每帧都会抛，只在内容变化时记一次
                 if (e.Message == lastError) return;
                 lastError = e.Message;
+                Log.LogError(e);
+            }
+        }
+
+        // 文本框聚焦时组合键可能只进 UI 事件队列，Input 轮询收不到；文本撤销在这里兜底
+        private void OnGUI()
+        {
+            try
+            {
+                TextHistory.HandleGuiKeys();
+            }
+            catch (Exception e)
+            {
                 Log.LogError(e);
             }
         }

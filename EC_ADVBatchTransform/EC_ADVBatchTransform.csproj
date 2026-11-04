@@ -22,6 +22,7 @@
         <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.CoreModule" Version="2017.4.24.4" />
         <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.UI" Version="2017.4.24.4" />
         <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.UIModule" Version="2017.4.24.4" />
+        <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.IMGUIModule" Version="2017.4.24.4" />
         <PackageReference Include="IllusionLibs.EmotionCreators.UnityEngine.TextRenderingModule" Version="2017.4.24.4" />
     </ItemGroup>
     <Target Name="SkipAllRefs" AfterTargets="ResolveReferences">

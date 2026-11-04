@@ -11,10 +11,62 @@ namespace EC_ADVBatchTransform
 
     internal abstract class UndoEntry
     {
+        // 动作发起时刻的序号，由 UndoStack.Push 补齐。回放顺序由它决定，不用入栈先后
+        internal int Sequence;
+
         internal abstract void Restore();
+
+        // 撤销前把当前值抓下来，重做时写回。只需要旧值的条目不覆盖
+        internal virtual void CaptureNow() { }
+
+        // 重做：写回 CaptureNow 抓到的值
+        internal virtual void Forward() { }
 
         // 回放后刷新面板，避免显示的值和场景不一致
         protected static void RefreshPanel() => Items.RefreshPrimaryFullPanel();
+    }
+
+    // 动作发起时刻的全局递增序号。检测会被推迟（输入框打字、按住鼠标期间不比对），
+    // 用发起时刻而非检测时刻取号，补记的条目才能插回编辑顺序中的正确位置。
+    // 分本体/槽位两个暂存位：两边可能各有一段未提交的编辑，共用一个会互相覆盖
+    internal enum ActionScope
+    {
+        Root,
+        Slot
+    }
+
+    internal static class ActionClock
+    {
+        private static int current;
+        private static readonly int[] pending = new int[2];
+
+        internal static int Next() => ++current;
+
+        internal static void Reset()
+        {
+            current = 0;
+            pending[0] = 0;
+            pending[1] = 0;
+        }
+
+        // 动作发起时取号；同一作用域已有未提交的号就沿用，代表同一次编辑
+        internal static void Begin(ActionScope scope)
+        {
+            int i = (int)scope;
+            if (pending[i] == 0) pending[i] = Next();
+        }
+
+        // 取发起号；没有暂存（如原生滑条拖动）就用当前序号
+        internal static int Take(ActionScope scope)
+        {
+            int i = (int)scope;
+            int seq = pending[i];
+            pending[i] = 0;
+            return seq != 0 ? seq : Next();
+        }
+
+        // 重建基线时丢弃暂存号：那一刻没有待提交的编辑
+        internal static void Discard(ActionScope scope) => pending[(int)scope] = 0;
     }
 
     // 原生操作与插件操作共用一个时间线，Ctrl+Z 按倒序回放。
@@ -22,6 +74,8 @@ namespace EC_ADVBatchTransform
     internal static class UndoStack
     {
         private static readonly List<UndoEntry> entries = new List<UndoEntry>();
+        // 撤销过的条目按倒序待重做；任何新编辑都会清掉
+        private static readonly List<UndoEntry> redone = new List<UndoEntry>();
 
         // 回放期间关闭记录，避免撤销写入被重新记录
         internal static bool Executing { get; private set; }
@@ -32,7 +86,12 @@ namespace EC_ADVBatchTransform
         internal static void Push(UndoEntry entry)
         {
             if (entry == null || Executing) return;
-            entries.Add(entry);
+            if (entry.Sequence <= 0) entry.Sequence = ActionClock.Next();
+            // 按序号插入：检测可能晚于之后发生的动作，Append 会让回放顺序与编辑顺序相反
+            int index = entries.Count;
+            while (index > 0 && entries[index - 1].Sequence > entry.Sequence) index--;
+            entries.Insert(index, entry);
+            redone.Clear();
             int overflow = entries.Count - ADVBatchTransformPlugin.UndoLimit.Value;
             if (overflow > 0) entries.RemoveRange(0, overflow);
         }
@@ -45,8 +104,30 @@ namespace EC_ADVBatchTransform
             Executing = true;
             try
             {
+                // 先抓当前值，回退后它就成了重做要写回的目标
+                entry.CaptureNow();
                 entry.Restore();
                 entries.RemoveAt(entries.Count - 1);
+                redone.Add(entry);
+            }
+            finally
+            {
+                Executing = false;
+                Version++;
+            }
+        }
+
+        // 误按 Ctrl+Z 把新建对象撤掉后，靠它把对象放回来
+        internal static void Redo()
+        {
+            if (redone.Count == 0) return;
+            var entry = redone[redone.Count - 1];
+            Executing = true;
+            try
+            {
+                entry.Forward();
+                redone.RemoveAt(redone.Count - 1);
+                entries.Add(entry);
             }
             finally
             {
@@ -58,6 +139,8 @@ namespace EC_ADVBatchTransform
         internal static void Clear()
         {
             entries.Clear();
+            redone.Clear();
+            ActionClock.Reset();
             Version++;
         }
     }
@@ -65,6 +148,7 @@ namespace EC_ADVBatchTransform
     internal sealed class TransformEntry : UndoEntry
     {
         private readonly List<ItemState> states;
+        private List<ItemState> captured;
 
         internal TransformEntry(List<ItemState> states)
         {
@@ -78,12 +162,29 @@ namespace EC_ADVBatchTransform
                 if (EditorContext.HasCtrl(s.Target)) Items.Write(s);
             RefreshPanel();
         }
+
+        internal override void CaptureNow()
+        {
+            captured = new List<ItemState>();
+            foreach (var s in states)
+                if (EditorContext.HasCtrl(s.Target)) captured.Add(Items.Read(s.Target));
+        }
+
+        internal override void Forward()
+        {
+            if (captured == null) return;
+            foreach (var s in captured)
+                if (EditorContext.HasCtrl(s.Target)) Items.Write(s);
+            RefreshPanel();
+        }
     }
 
     // 原生拖动源：位置、角度、尺寸
     internal sealed class FieldEntry : UndoEntry
     {
         private readonly ItemState state;
+        private ItemState captured;
+        private bool hasCapture;
 
         internal FieldEntry(ItemState state)
         {
@@ -94,6 +195,20 @@ namespace EC_ADVBatchTransform
         {
             if (!EditorContext.HasCtrl(state.Target)) return;
             Items.Write(state);
+            RefreshPanel();
+        }
+
+        internal override void CaptureNow()
+        {
+            if (!EditorContext.HasCtrl(state.Target)) return;
+            captured = Items.Read(state.Target);
+            hasCapture = true;
+        }
+
+        internal override void Forward()
+        {
+            if (!hasCapture || !EditorContext.HasCtrl(captured.Target)) return;
+            Items.Write(captured);
             RefreshPanel();
         }
     }
@@ -108,10 +223,23 @@ namespace EC_ADVBatchTransform
         Color,
         OutlineColor,
         OutlineSpread,
+        // 以下为气泡里的槽位（Text1/Text2）字段，Target.Slot >= 0
         SlotRot,
         SlotColor,
         SlotOutlineColor,
-        SlotOutlineSpread
+        SlotOutlineSpread,
+        SlotMsg,
+        SlotFont,
+        SlotFontSize,
+        SlotLineSpacing,
+        SlotTop,
+        SlotBottom,
+        SlotLeft,
+        SlotRight,
+        SlotAnime,
+        SlotTextDir,
+        SlotAutoLine,
+        SlotEffect
     }
 
     // 气泡或特效本身（Slot = -1），或气泡里的某个槽位
@@ -140,15 +268,24 @@ namespace EC_ADVBatchTransform
         }
     }
 
-    // 字段旧值按类型二选一
+    // 字段旧值按类型分装，只有用到的成员有意义
     internal struct PropValue
     {
         public float Float;
+        public int Int;
+        public bool Bool;
         public Color Color;
+        public string Text;
 
         public static PropValue Of(float v) => new PropValue { Float = v };
 
+        public static PropValue Of(int v) => new PropValue { Int = v };
+
+        public static PropValue Of(bool v) => new PropValue { Bool = v };
+
         public static PropValue Of(Color c) => new PropValue { Color = c };
+
+        public static PropValue Of(string s) => new PropValue { Text = s };
     }
 
     internal sealed class PropEntry : UndoEntry
@@ -170,6 +307,15 @@ namespace EC_ADVBatchTransform
         {
             PropWriter.Write(Target, Field, Old);
             RefreshPanel();
+            // 列表行显示的是气泡首行文字，文本还原后要刷新列表才跟上
+            if (Field == PropField.SlotMsg) EditorContext.List?.UpdateUI();
+        }
+
+        internal override void Forward()
+        {
+            PropWriter.Write(Target, Field, Now);
+            RefreshPanel();
+            if (Field == PropField.SlotMsg) EditorContext.List?.UpdateUI();
         }
     }
 
@@ -186,6 +332,12 @@ namespace EC_ADVBatchTransform
         internal override void Restore()
         {
             foreach (var e in entries) e.Restore();
+            RefreshPanel();
+        }
+
+        internal override void Forward()
+        {
+            foreach (var e in entries) e.Forward();
             RefreshPanel();
         }
     }
@@ -245,7 +397,7 @@ namespace EC_ADVBatchTransform
             }
         }
 
-        // 槽位 rot 是相对气泡的 localRotation，与 TextLayoutUICtrl 的写法定一致
+        // 槽位字段一律先写数据对象再同步画面组件，与 TextLayoutUICtrl 的写法定一致
         internal static void WriteSlot(SpeechBubbles bubble, int slot, PropField field, PropValue v)
         {
             var layout = SlotLayout(bubble, slot);
@@ -253,6 +405,54 @@ namespace EC_ADVBatchTransform
             var info = SlotInfo(bubble, slot);
             switch (field)
             {
+                case PropField.SlotMsg:
+                    layout.msg = v.Text ?? string.Empty;
+                    if (info != null) info.msg = layout.msg;
+                    break;
+                case PropField.SlotFont:
+                    layout.font = v.Int;
+                    if (info != null) info.fontInt = v.Int;
+                    break;
+                case PropField.SlotFontSize:
+                    layout.fontSize = v.Int;
+                    if (info != null) info.fontSize = v.Int;
+                    break;
+                case PropField.SlotLineSpacing:
+                    layout.lineSpacing = v.Float;
+                    if (info != null) info.lineSpacing = v.Float;
+                    break;
+                case PropField.SlotTextDir:
+                    layout.textDir = (SpeechBubbles.TextDirection)v.Int;
+                    if (info != null) info.textDir = layout.textDir;
+                    break;
+                case PropField.SlotAnime:
+                    layout.anime = v.Bool;
+                    if (info != null) info.anime = v.Bool;
+                    break;
+                case PropField.SlotAutoLine:
+                    layout.autoLine = v.Bool;
+                    if (info != null) info.autoLine = v.Bool;
+                    break;
+                case PropField.SlotEffect:
+                    layout.effect = v.Int;
+                    if (info != null) info.effect = v.Int;
+                    break;
+                case PropField.SlotTop:
+                    layout.top = v.Float;
+                    if (info != null) info.top = v.Float;
+                    break;
+                case PropField.SlotBottom:
+                    layout.bottom = v.Float;
+                    if (info != null) info.bottom = v.Float;
+                    break;
+                case PropField.SlotLeft:
+                    layout.left = v.Float;
+                    if (info != null) info.left = v.Float;
+                    break;
+                case PropField.SlotRight:
+                    layout.right = v.Float;
+                    if (info != null) info.right = v.Float;
+                    break;
                 case PropField.SlotRot:
                     layout.rot = v.Float % 360f;
                     if (info != null) info.rot = layout.rot;
@@ -308,6 +508,18 @@ namespace EC_ADVBatchTransform
             if (layout == null) return default;
             switch (field)
             {
+                case PropField.SlotMsg: return PropValue.Of(layout.msg);
+                case PropField.SlotFont: return PropValue.Of(layout.font);
+                case PropField.SlotFontSize: return PropValue.Of(layout.fontSize);
+                case PropField.SlotLineSpacing: return PropValue.Of(layout.lineSpacing);
+                case PropField.SlotTextDir: return PropValue.Of((int)layout.textDir);
+                case PropField.SlotAnime: return PropValue.Of(layout.anime);
+                case PropField.SlotAutoLine: return PropValue.Of(layout.autoLine);
+                case PropField.SlotEffect: return PropValue.Of(layout.effect);
+                case PropField.SlotTop: return PropValue.Of(layout.top);
+                case PropField.SlotBottom: return PropValue.Of(layout.bottom);
+                case PropField.SlotLeft: return PropValue.Of(layout.left);
+                case PropField.SlotRight: return PropValue.Of(layout.right);
                 case PropField.SlotRot: return PropValue.Of(layout.rot);
                 case PropField.SlotColor: return PropValue.Of(layout.color);
                 case PropField.SlotOutlineColor: return PropValue.Of(layout.outlineColor);
@@ -334,6 +546,8 @@ namespace EC_ADVBatchTransform
         private readonly SpeechBubbles bubble;
         private readonly int slot;
         private readonly float rot;
+        private float captured;
+        private bool hasCapture;
 
         internal SlotRotEntry(SpeechBubbles bubble, int slot, float rot)
         {
@@ -347,12 +561,27 @@ namespace EC_ADVBatchTransform
             if (EditorContext.HasCtrl(bubble)) SlotOps.WriteRot(bubble, slot, rot);
             RefreshPanel();
         }
+
+        internal override void CaptureNow()
+        {
+            if (!EditorContext.HasCtrl(bubble)) return;
+            captured = PropWriter.Read(PropTarget.For(bubble, slot), PropField.SlotRot).Float;
+            hasCapture = true;
+        }
+
+        internal override void Forward()
+        {
+            if (!hasCapture || !EditorContext.HasCtrl(bubble)) return;
+            SlotOps.WriteRot(bubble, slot, captured);
+            RefreshPanel();
+        }
     }
 
     internal sealed class OrderEntry : UndoEntry
     {
         private readonly TextAndEffectListUICtrl list;
         private readonly List<SortOrder> order;
+        private List<SortOrder> captured;
 
         internal OrderEntry(TextAndEffectListUICtrl list, List<SortOrder> order)
         {
@@ -363,14 +592,31 @@ namespace EC_ADVBatchTransform
         // 对象有增删时整条跳过，避免把已删除的对象写回列表
         internal override void Restore()
         {
+            if (!Apply(order)) return;
+        }
+
+        internal override void CaptureNow()
+        {
+            captured = list != null ? new List<SortOrder>(list.lstUI) : null;
+        }
+
+        internal override void Forward()
+        {
+            if (captured == null) return;
+            Apply(captured);
+        }
+
+        private bool Apply(List<SortOrder> target)
+        {
             var now = list.lstUI;
-            if (now.Count != order.Count) return;
-            foreach (var so in order)
-                if (!now.Contains(so)) return;
+            if (now.Count != target.Count) return false;
+            foreach (var so in target)
+                if (!now.Contains(so)) return false;
             now.Clear();
-            now.AddRange(order);
+            now.AddRange(target);
             list.Sort();
             list.UpdateUI();
+            return true;
         }
     }
 
@@ -394,6 +640,15 @@ namespace EC_ADVBatchTransform
                 var ui = EditorContext.UI;
                 if (ui != null) ui.sortOrder = null;
             }
+        }
+
+        // 重做新建：按同一实例放回，并把主对象指回它
+        internal override void Forward()
+        {
+            if (EditorContext.HasCtrl(target)) return;
+            AddNative(target);
+            var ui = EditorContext.UI;
+            if (ui != null) ui.sortOrder = target;
         }
 
         // 新建与删除撤销共用
@@ -431,6 +686,8 @@ namespace EC_ADVBatchTransform
     {
         private readonly SortOrder target;
         private readonly int id;
+        private int captured;
+        private bool hasCapture;
 
         internal StyleEntry(SortOrder target, int id)
         {
@@ -441,14 +698,33 @@ namespace EC_ADVBatchTransform
         internal override void Restore()
         {
             if (!EditorContext.HasCtrl(target)) return;
+            Apply(id);
+        }
+
+        internal override void CaptureNow()
+        {
+            if (target is SpeechBubbles sb) captured = sb.id;
+            else if (target is ScreenEffect se) captured = se.id;
+            else return;
+            hasCapture = true;
+        }
+
+        internal override void Forward()
+        {
+            if (!hasCapture || !EditorContext.HasCtrl(target)) return;
+            Apply(captured);
+        }
+
+        private void Apply(int styleId)
+        {
             if (target is SpeechBubbles sb)
             {
-                sb.id = id;
+                sb.id = styleId;
                 EditorContext.TextPanel?.ChangeText(sb);
             }
             else if (target is ScreenEffect se)
             {
-                se.id = id;
+                se.id = styleId;
                 EditorContext.EffectPanel?.ChangeEffect(se);
             }
         }
@@ -494,6 +770,19 @@ namespace EC_ADVBatchTransform
             list.Sort();
             list.UpdateUI();
         }
+
+        // 重做删除：把刚放回来的对象再删一次
+        internal override void Forward()
+        {
+            if (!EditorContext.HasCtrl(target)) return;
+            MultiSelection.Drop(target);
+            if (EditorContext.Primary == target)
+            {
+                var ui = EditorContext.UI;
+                if (ui != null) ui.sortOrder = null;
+            }
+            SpawnEntry.DeleteNative(target);
+        }
     }
 
     // 批量删除：一次 Ctrl+Z 把整组对象按原顺序放回
@@ -526,6 +815,23 @@ namespace EC_ADVBatchTransform
             now.AddRange(ordered);
             for (int i = 0; i < now.Count; i++) now[i].sortOrder = i;
             list.Sort();
+            list.UpdateUI();
+        }
+
+        // 重做删除：整组再删一次，并重编号抹掉空洞
+        internal override void Forward()
+        {
+            var ui = EditorContext.UI;
+            if (ui != null) ui.sortOrder = null;
+            foreach (var so in targets)
+            {
+                if (!EditorContext.HasCtrl(so)) continue;
+                MultiSelection.Drop(so);
+                SpawnEntry.DeleteNative(so);
+            }
+            var list = EditorContext.List;
+            if (list == null) return;
+            BatchEdit.Renumber(list);
             list.UpdateUI();
         }
     }
@@ -568,6 +874,23 @@ namespace EC_ADVBatchTransform
                 var primary = EditorContext.UI;
                 if (primary != null) primary.sortOrder = null;
             }
+        }
+
+        // 重做复制：把同一批副本按原实例放回并重新选中
+        internal override void Forward()
+        {
+            foreach (var so in copies)
+                if (!EditorContext.HasCtrl(so)) SpawnEntry.AddNative(so);
+            var list = EditorContext.List;
+            if (list != null)
+            {
+                BatchEdit.Renumber(list);
+                list.UpdateUI();
+            }
+            var alive = new List<SortOrder>();
+            foreach (var so in copies)
+                if (EditorContext.HasCtrl(so)) alive.Add(so);
+            if (alive.Count > 0) MultiSelection.SelectGroup(alive);
         }
     }
 }

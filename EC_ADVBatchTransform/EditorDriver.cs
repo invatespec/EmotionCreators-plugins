@@ -10,6 +10,7 @@ namespace EC_ADVBatchTransform
 
         internal static void Tick()
         {
+            TextHistory.Tick();
             if (!EditorContext.InPart)
             {
                 if (wasInPart) LeavePart();
@@ -36,6 +37,8 @@ namespace EC_ADVBatchTransform
             BatchOps.Cancel();
             SlotOps.Cancel();
             UndoStack.Clear();
+            TextHistory.Clear();
+            EditFocus.Reset();
             EditRecorder.Reset();
             MultiSelection.Clear();
             lastCut = EditorContext.Cut;

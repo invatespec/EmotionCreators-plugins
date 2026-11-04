@@ -12,6 +12,8 @@ namespace EC_ADVBatchTransform
         {
             internal SortOrder Source;
             internal ItemState Start;
+            // 按下那一刻取的序号：改动要到松手后才入栈，不能用入栈时的序号
+            internal int Seq;
         }
 
         private static readonly List<DragGesture> gestures = new List<DragGesture>();
@@ -29,7 +31,12 @@ namespace EC_ADVBatchTransform
             if (UndoStack.Executing || so == null || !EditorContext.InTextEffectPage) return;
             foreach (var g in gestures)
                 if (g.Source == so) return;
-            gestures.Add(new DragGesture { Source = so, Start = Items.Read(so) });
+            gestures.Add(new DragGesture
+            {
+                Source = so,
+                Start = Items.Read(so),
+                Seq = ActionClock.Next()
+            });
         }
 
         // 插件批量手势已记成一条 TransformEntry，不再追加拖动源的单独记录
@@ -50,13 +57,15 @@ namespace EC_ADVBatchTransform
                 return;
             }
             if (gestures.Count == 0) return;
+            // 先落两条轨道待提交的改动：下面的 Invalidate 会清掉基线，改了就丢了
+            PanelWatcher.Flush();
             bool dirty = false;
             foreach (var g in gestures)
             {
                 if (!EditorContext.HasCtrl(g.Source)) continue;
                 var now = Items.Read(g.Source);
                 if (Same(g.Start, now)) continue;
-                UndoStack.Push(new FieldEntry(g.Start));
+                UndoStack.Push(new FieldEntry(g.Start) { Sequence = g.Seq });
                 dirty = true;
             }
             gestures.Clear();

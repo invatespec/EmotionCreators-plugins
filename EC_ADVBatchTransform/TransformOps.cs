@@ -18,6 +18,8 @@ namespace EC_ADVBatchTransform
         public GestureKind Kind;
         public SortOrder Source;
         public PivotMode Pivot;
+        // 按下/按键那一刻取的序号：条目要到手势结束才入栈，不能用入栈时的序号
+        public int Seq;
         public readonly List<ItemState> Start = new List<ItemState>();
         public Vector2 Center;
         public Vector2 TotalMove;
@@ -27,7 +29,13 @@ namespace EC_ADVBatchTransform
 
         internal static Gesture Capture(GestureKind kind, SortOrder source)
         {
-            var g = new Gesture { Kind = kind, Source = source, Pivot = ADVBatchTransformPlugin.Pivot.Value };
+            var g = new Gesture
+            {
+                Kind = kind,
+                Source = source,
+                Pivot = ADVBatchTransformPlugin.Pivot.Value,
+                Seq = ActionClock.Next()
+            };
             foreach (var so in MultiSelection.Members)
             {
                 var state = Items.Read(so);
@@ -60,7 +68,8 @@ namespace EC_ADVBatchTransform
         internal static void End()
         {
             if (current == null) return;
-            if (current.Changed) UndoStack.Push(new TransformEntry(current.Start));
+            if (current.Changed)
+                UndoStack.Push(new TransformEntry(current.Start) { Sequence = current.Seq });
             // 拖动源的原生记录已被这条覆盖
             if (current.Source != null) EditRecorder.SuppressNative();
             current = null;

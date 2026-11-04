@@ -10,6 +10,8 @@ namespace EC_ADVBatchTransform
         private static SpeechBubbles bubble;
         private static int slot = -1;
         private static float startRot;
+        // 按下那一刻取的序号：条目要到手势结束才入栈
+        private static int seq;
         private static bool changed;
 
         internal static bool Active => bubble != null;
@@ -23,13 +25,14 @@ namespace EC_ADVBatchTransform
             bubble = target;
             slot = index;
             startRot = target.textLayouts[index].rot;
+            seq = ActionClock.Next();
             changed = false;
         }
 
         internal static void End()
         {
             if (bubble == null) return;
-            if (changed) UndoStack.Push(new SlotRotEntry(bubble, slot, startRot));
+            if (changed) UndoStack.Push(new SlotRotEntry(bubble, slot, startRot) { Sequence = seq });
             bubble = null;
         }
 

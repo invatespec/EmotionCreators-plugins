@@ -46,15 +46,20 @@ namespace EC_ADVBatchTransform
 
         private static void HandleHotkeys()
         {
+            // 文本输入框内 Ctrl+Z/Ctrl+Y 走文本历史，焦点在外时才轮到对象撤销
+            if (TextHistory.HandleInputKeys()) return;
             bool pivot = ADVBatchTransformPlugin.PivotToggleKey.Value.IsDown();
             bool undo = ADVBatchTransformPlugin.UndoKey.Value.IsDown();
-            if (!pivot && !undo) return;
+            bool redo = ADVBatchTransformPlugin.RedoKey.Value.IsDown();
+            if (!pivot && !undo && !redo) return;
+            // 输入框聚焦时按键归原生输入，撤销与重做都由 TextHistory 处理
             if (EditorContext.IsTyping) return;
-            // 撤销看页面而非 CanOperate：预览、隐藏 UI 时面板改动也要能撤销
-            if (undo && EditorContext.InTextEffectPage && !BatchOps.Active && !SlotOps.Active
+            // 撤销/重做看页面而非 CanOperate：预览、隐藏 UI 时面板改动也要能回放
+            if ((undo || redo) && EditorContext.InTextEffectPage && !BatchOps.Active && !SlotOps.Active
                 && !Input.GetMouseButton(0))
             {
-                UndoStack.Undo();
+                if (undo) UndoStack.Undo();
+                else UndoStack.Redo();
             }
             if (pivot && EditorContext.CanOperate) TogglePivot();
         }
