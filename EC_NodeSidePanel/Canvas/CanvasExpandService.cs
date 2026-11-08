@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using BepInEx.Logging;
+using EC_NodeSidePanel.Api;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
@@ -15,6 +17,8 @@ namespace EC_NodeSidePanel
 
         private static readonly HashSet<int> ExpandedIds = new HashSet<int>();
         private static readonly Dictionary<int, float> MinLocalScale = new Dictionary<int, float>();
+        private static readonly Dictionary<int, Vector2> OriginalSizes = new Dictionary<int, Vector2>();
+        private static readonly Dictionary<int, float> BackgroundPixelsPerUnit = new Dictionary<int, float>();
 
         internal static readonly AccessTools.FieldRef<NodeControl, float> GridScaleRef =
             AccessTools.FieldRefAccess<NodeControl, float>("gridScale");
@@ -27,6 +31,11 @@ namespace EC_NodeSidePanel
         internal static float SizeMultiplier = 5f;
 
         internal static float ScaleFromGridScale(float gridScale) => 1.5f - gridScale;
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
 
         internal static Vector2 ComputeMaxPan(RectTransform grid, RectTransform viewport, float scale)
         {
@@ -62,21 +71,149 @@ namespace EC_NodeSidePanel
                 return;
             }
 
-            EnsureCenterPivot(grid);
-            Vector2 after = before * mul;
-            grid.sizeDelta = after;
-
-            var parent = grid.parent as RectTransform;
-            if (parent != null)
+            CanvasState state;
+            string error;
+            if (!TryResizeAbsolute(control, before * mul, true, out state, out error))
             {
+                Log?.LogWarning("absolute canvas expand failed: " + error);
+                return;
+            }
+            Log?.LogInfo($"node canvas expanded x{mul}: {before} -> {state.CurrentSize}");
+        }
+
+        internal static bool TryGetState(NodeControl control, out CanvasState state, out string error)
+        {
+            state = null;
+            error = null;
+            try
+            {
+                if (control == null || control.rtfGrid == null)
+                {
+                    error = "NodeControl 或 rtfGrid 不可用。";
+                    return false;
+                }
+                var grid = control.rtfGrid;
+                var parent = grid.parent as RectTransform;
+                if (parent == null)
+                {
+                    error = "rtfGrid 缺少视口父节点。";
+                    return false;
+                }
+                int id = control.GetInstanceID();
+                Vector2 current = grid.sizeDelta;
+                if (current.x <= 0f || current.y <= 0f)
+                {
+                    error = "rtfGrid.sizeDelta 无效：" + current;
+                    return false;
+                }
+                Vector2 original;
+                if (!OriginalSizes.TryGetValue(id, out original))
+                {
+                    original = current;
+                    OriginalSizes[id] = original;
+                }
+                float minLocal = GetMinLocalScale(control, grid, parent);
+                state = new CanvasState
+                {
+                    CurrentSize = current,
+                    NativeSize = original,
+                    ViewportSize = parent.rect.size,
+                    Pivot = grid.pivot,
+                    Pan = VGridPosRef(control),
+                    Scale = ScaleFromGridScale(GridScaleRef(control)),
+                    MinScale = minLocal,
+                    BackgroundReady = FindGridRawImage(grid) != null || FindGridImage(grid) != null
+                };
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        internal static bool TryResizeAbsolute(
+            NodeControl control,
+            Vector2 desiredSize,
+            bool preserveView,
+            out CanvasState state,
+            out string error)
+        {
+            state = null;
+            error = null;
+            if (control == null || control.rtfGrid == null)
+            {
+                error = "NodeControl 或 rtfGrid 不可用。";
+                return false;
+            }
+            if (!IsFinite(desiredSize.x) || !IsFinite(desiredSize.y)
+                || desiredSize.x <= 0f || desiredSize.y <= 0f)
+            {
+                error = "目标画布尺寸必须是正有限数：" + desiredSize;
+                return false;
+            }
+
+            try
+            {
+                var grid = control.rtfGrid;
+                var parent = grid.parent as RectTransform;
+                if (parent == null)
+                {
+                    error = "rtfGrid 缺少视口父节点。";
+                    return false;
+                }
+                int id = control.GetInstanceID();
+                if (!OriginalSizes.ContainsKey(id))
+                    OriginalSizes[id] = grid.sizeDelta;
+
+                Vector2 localViewCenter = default(Vector2);
+                if (preserveView)
+                {
+                    Vector3 viewportWorld = parent.TransformPoint(parent.rect.center);
+                    localViewCenter = grid.InverseTransformPoint(viewportWorld);
+                }
+
+                EnsureCenterPivot(grid);
+                grid.sizeDelta = desiredSize;
+
                 float fit = ComputeFitScale(grid, parent);
                 float minLocal = Mathf.Clamp(fit * 0.95f, 0.02f, 0.5f);
                 MinLocalScale[id] = minLocal;
-                Log?.LogInfo($"zoom-out floor localScale={minLocal:F3} (fit={fit:F3})");
-            }
 
-            FixBackground(grid, after);
-            Log?.LogInfo($"node canvas expanded x{mul}: {before} -> {after}");
+                float scale = Mathf.Clamp(ScaleFromGridScale(GridScaleRef(control)), minLocal, DefaultZoomInScale);
+                GridScaleRef(control) = 1.5f - scale;
+                grid.localScale = new Vector3(scale, scale, 1f);
+
+                Vector2 pan = VGridPosRef(control);
+                Vector2 maxPan = ComputeMaxPan(grid, parent, scale);
+                pan.x = Mathf.Clamp(pan.x, -maxPan.x, maxPan.x);
+                pan.y = Mathf.Clamp(pan.y, -maxPan.y, maxPan.y);
+                grid.anchoredPosition = pan;
+
+                if (preserveView)
+                {
+                    Vector2 viewportPoint = parent.InverseTransformPoint(grid.TransformPoint(localViewCenter));
+                    Vector2 delta = parent.rect.center - viewportPoint;
+                    pan += delta;
+                    maxPan = ComputeMaxPan(grid, parent, scale);
+                    pan.x = Mathf.Clamp(pan.x, -maxPan.x, maxPan.x);
+                    pan.y = Mathf.Clamp(pan.y, -maxPan.y, maxPan.y);
+                    grid.anchoredPosition = pan;
+                }
+                VGridPosRef(control) = pan;
+
+                bool backgroundReady = EnsureBackground(control, grid, desiredSize);
+                Log?.LogInfo($"absolute canvas resize -> {desiredSize}, minScale={minLocal:F3}, pan={pan}, background={backgroundReady}");
+                if (!TryGetState(control, out state, out error))
+                    return false;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
         }
 
         internal static bool GridDragFuncPrefix(NodeControl instance, Vector2 move)
@@ -176,15 +313,27 @@ namespace EC_NodeSidePanel
             grid.anchoredPosition += new Vector2(deltaPivot.x * size.x, deltaPivot.y * size.y);
         }
 
-        private static void FixBackground(RectTransform grid, Vector2 targetSize)
+        private static bool EnsureBackground(NodeControl control, RectTransform grid, Vector2 targetSize)
         {
+            var existingRaw = FindGridRawImage(grid);
+            if (existingRaw != null)
+            {
+                UpdateRawBackground(control, existingRaw, targetSize);
+                return true;
+            }
+
             var image = FindGridImage(grid);
             if (image == null)
             {
-                Log?.LogWarning("grid Image not found under rtfGrid; background unchanged.");
-                return;
+                Log?.LogWarning("grid Image/RawImage not found under rtfGrid; background unchanged.");
+                return false;
             }
+            FixBackground(control, image, targetSize);
+            return FindGridRawImage(grid) != null;
+        }
 
+        private static void FixBackground(NodeControl control, Image image, Vector2 targetSize)
+        {
             Sprite sprite = image.sprite;
             Color color = image.color;
             bool raycast = image.raycastTarget;
@@ -212,7 +361,7 @@ namespace EC_NodeSidePanel
             float uvX = Mathf.Max(1f, targetSize.x / tileUiW);
             float uvY = Mathf.Max(1f, targetSize.y / tileUiH);
 
-            Object.DestroyImmediate(image);
+            UnityEngine.Object.DestroyImmediate(image);
             var raw = go.GetComponent<RawImage>() ?? go.AddComponent<RawImage>();
             if (raw == null)
             {
@@ -225,7 +374,58 @@ namespace EC_NodeSidePanel
             raw.raycastTarget = raycast;
             raw.uvRect = new Rect(0f, 0f, uvX, uvY);
             raw.enabled = true;
+            BackgroundPixelsPerUnit[control.GetInstanceID()] = ppu;
             Log?.LogInfo($"background '{goName}' -> RawImage uv=({uvX:F1},{uvY:F1}), tile={tileTex.width}x{tileTex.height}");
+        }
+
+        private static void UpdateRawBackground(NodeControl control, RawImage raw, Vector2 targetSize)
+        {
+            if (raw == null || raw.texture == null)
+                return;
+            float ppu;
+            if (!BackgroundPixelsPerUnit.TryGetValue(control.GetInstanceID(), out ppu) || ppu <= 0f)
+                ppu = 100f;
+            float tileUiW = raw.texture.width / ppu;
+            float tileUiH = raw.texture.height / ppu;
+            if (tileUiW < 1f) tileUiW = raw.texture.width;
+            if (tileUiH < 1f) tileUiH = raw.texture.height;
+            raw.uvRect = new Rect(0f, 0f,
+                Mathf.Max(1f, targetSize.x / tileUiW),
+                Mathf.Max(1f, targetSize.y / tileUiH));
+        }
+
+        private static RawImage FindGridRawImage(RectTransform grid)
+        {
+            var self = grid.GetComponent<RawImage>();
+            if (self != null)
+                return self;
+
+            var raws = grid.GetComponentsInChildren<RawImage>(true);
+            for (int i = 0; i < raws.Length; i++)
+            {
+                var raw = raws[i];
+                if (raw == null) continue;
+                string n = raw.gameObject.name ?? string.Empty;
+                if (n == "grid" || n.ToLowerInvariant().Contains("grid"))
+                    return raw;
+            }
+
+            RawImage best = null;
+            float bestArea = 0f;
+            for (int i = 0; i < raws.Length; i++)
+            {
+                var raw = raws[i];
+                if (raw == null) continue;
+                var rt = raw.transform as RectTransform;
+                if (rt == null) continue;
+                float area = Mathf.Abs(rt.sizeDelta.x * rt.sizeDelta.y);
+                if (area > bestArea)
+                {
+                    bestArea = area;
+                    best = raw;
+                }
+            }
+            return best;
         }
 
         private static Image FindGridImage(RectTransform grid)

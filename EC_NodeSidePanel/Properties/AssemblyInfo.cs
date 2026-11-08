@@ -5,5 +5,5 @@ using System.Reflection;
 [assembly: AssemblyCompany("Claude")]
 [assembly: AssemblyProduct("EC_NodeSidePanel")]
 [assembly: AssemblyCopyright("Copyright © 2026")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("2.2.0.0")]
+[assembly: AssemblyFileVersion("2.2.0.0")]

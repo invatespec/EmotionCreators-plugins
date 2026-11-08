@@ -19,7 +19,7 @@ namespace EC_NodeSidePanel
     {
         public const string GUID = "EC_NodeSidePanel";
         public const string PluginName = "EC Node Side Panel";
-        public const string Version = "2.1.0";
+        public const string Version = "2.2.0";
 
         internal static ManualLogSource Log;
         internal static NodeSidePanelPlugin Instance;
