@@ -21,7 +21,7 @@ namespace EC_HEditPosePanel
 
         internal bool HasClipboard => _clipboard.Count > 0;
 
-        // 裙子左右镜像（真机实测）：x 不变，y/z 取负并归一化到 [0,360)
+        // 裙子左右镜像:x 不变,y/z 取负并归一化到 [0,360)
         internal static Quaternion MirrorSkirt(Quaternion rotation)
         {
             Vector3 e = rotation.eulerAngles;

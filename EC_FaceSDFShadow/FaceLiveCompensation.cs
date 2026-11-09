@@ -4,20 +4,9 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 表情 UV 补偿·运行时实测模式。
-    ///
-    /// 背景：离线 blendshape 系数表只对纯 blendshape 表情
-    /// （wink/def_cl）准确；切ない等表情的颊部上移由 FBSAssist 按表情权重直接驱动
-    /// （不走 cf_O_face blendshape 通道），离线表结构性缺失。本模式改为每帧
-    /// BakeMesh 实测"当前姿势 vs 中性参照"的顶点位移——对任意头型（原版/mod/换头）
-    /// 与任意驱动源（blendshape/骨骼/第三方）天然正确。
-    ///
-    /// 管线：onPreCull（权重终值）→ BakeMesh → 顶点转到头骨空间（剔头部旋转）→
-    /// 按区域求"UV 梯度投影位移"均值 → 以纯平移 affine 写入现有 _BlendCompAffine
-    /// （shader 零改动）。
-    ///
-    /// 中性参照：全部 blendshape 权重≈0 的帧自动采样（FBSAssist 联动同步归零）。
-    /// 参照建立前回退离线表（FaceBlendCompensation）。
+    /// 表情 UV 补偿的运行时模式:每帧 BakeMesh 比较当前姿势与中性参照取顶点位移。
+    /// 离线系数表漏掉 FBSAssist 直驱的颊部上移(不走 blendshape 通道),此模式对任意
+    /// 头型与驱动源都成立。参照建立前回退离线表。
     /// </summary>
     internal static class FaceLiveCompensation
     {
@@ -47,7 +36,7 @@ namespace EC_FaceSDFShadow
             internal Mesh MeshKey;                 // 梯度所属 mesh（换头重建）
             internal int LastRefFrame = -1000;
             // "无表情"判定豁免通道：眼/口的 def 插值对（中性=睁眼+闭嘴时恒非零）。
-            // 实测 F10 dump：中性时 eye_def_cl≈26~49、kuti_def_cl=100。
+            // F10 dump 实测值:中性时 eye_def_cl≈26~49、kuti_def_cl=100。
             internal readonly int[] ExemptIdxs = new int[4];
             internal int CalmStreak;               // 连续"无表情且 def 稳定"帧计数（防 idle 眨眼中途采参照）
             internal float PrevDefCl = -999f;      // 上一帧 eye def_cl，稳定=帧间变化小（首帧无先验视为稳定）
@@ -60,7 +49,7 @@ namespace EC_FaceSDFShadow
         private static readonly float[] _accum = new float[30];
 
         /// <summary>
-        /// onPreCull 阶段：实测当前表情位移并推给 overlay 材质。
+        /// onPreCull 阶段测量当前表情位移并推给 overlay 材质。
         /// 返回 false 表示本帧未产出（参照未建立/异常），调用方回退离线表。
         /// </summary>
         internal static bool Push(SkinnedMeshRenderer smr, Material mat, Transform headBone)
@@ -111,7 +100,7 @@ namespace EC_FaceSDFShadow
 
             if (!st.HasRef)
             {
-                // 参照未建立：本帧不出实测值，由离线表兜底
+                // 参照未建立:本帧不出测量值,由离线表兜底
                 mat.SetFloat(ShaderIDs.BlendCompEnable, 0f);
                 return false;
             }
@@ -349,7 +338,7 @@ namespace EC_FaceSDFShadow
 
         /// <summary>
         /// BakeMesh 输出空间自适应：比较两种解释下顶点均值到头骨位置的距离。
-        /// EC 的 2017.4 实测为世界空间，但 SMR transform 接近 identity 时两者数值接近，
+        /// EC 的 2017.4 为世界空间,但 SMR transform 接近 identity 时两者数值接近,
         /// 取更近者并保留该解释（头骨离脸中心近，错误解释会引入 SMR 偏移误差）。
         /// </summary>
         private static bool DetectBakeSpace(SkinnedMeshRenderer smr, Transform headBone, List<Vector3> verts)

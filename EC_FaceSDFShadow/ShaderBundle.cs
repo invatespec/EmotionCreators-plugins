@@ -6,12 +6,9 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 从嵌入资源加载 shader assetbundle。手法同 MaterialEditor
-    /// （Reference/KK_Plugins-master/src/MaterialEditor.Core/Core.MaterialEditor.cs:854-882）。
-    ///
-    /// 坑：bundle 里的资产键是小写化的工程路径（assets/shaders/xxx.shader），
-    /// 不是 shader 声明名（Rainbowing/Xxx）。用声明名调 LoadAsset 会静默返回 null。
-    /// 故统一走 LoadAllAssets 再按 shader.name 匹配。
+    /// 从嵌入资源加载 shader assetbundle。坑:bundle 里的资产键是小写化的工程路径,
+    /// 不是 shader 声明名,用声明名调 LoadAsset 会静默返回 null,
+    /// 因此统一走 LoadAllAssets 再按 shader.name 匹配。
     /// </summary>
     internal static class ShaderBundle
     {

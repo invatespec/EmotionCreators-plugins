@@ -757,7 +757,7 @@ namespace EC_FaceSDFShadow
 
         /// <summary>
         /// 头骨矩阵推送必须挂 Camera.onPreCull:NeckLookControllerVer2 在 LateUpdate 写
-        /// 骨骼,插件 LateUpdate 与它同阶段顺序不确定,实测会读到写入前姿势;
+        /// 骨骼,插件 LateUpdate 与它同阶段顺序不确定,会读到写入前姿势;
         /// onPreCull 在所有 LateUpdate 后、渲染前,保证拿到最终骨骼姿势。
         /// </summary>
         private static void OnPreCull(Camera cam)

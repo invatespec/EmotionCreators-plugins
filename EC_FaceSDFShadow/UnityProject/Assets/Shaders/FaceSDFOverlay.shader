@@ -88,7 +88,7 @@ Shader "Rainbowing/FaceSDFOverlay"
 
             sampler2D _SDFTex;
             // 屏幕空间阴影图（引擎全局绑定）。receiveShadows=false 的 renderer 上
-            // 该绑定仍成立（实测）；若不成立，症状 = 颈带出现异常平坦明暗
+            // 该绑定成立;若不成立,症状 = 颈带出现异常平坦明暗
             // （采样到未绑定的黑/白）。
             // 头发独占屏幕空间 RT:HairShadowPass 把头发屏幕域
             // 位移后渲进与主相机同视角的 RT;R=预乘"原位置"眼深,G=覆盖率;
@@ -144,7 +144,7 @@ Shader "Rainbowing/FaceSDFOverlay"
             float _BlendCompEnable;
 
             // ---- 颈带 crossfade V 常量 ----
-            // cf_O_face 的颈段是 UV 低 V 处的近全宽圆柱展开带（512 coverage 逐行实测
+            // cf_O_face 的颈段是 UV 低 V 处的近全宽圆柱展开带(512 coverage 逐行
             // v≈0.017..0.33），唇部约 v0.30 以上。带顶 _NeckBandTopV 可调（覆盖全颈段
             // 含下颌下；上拉可盖住下颌两侧遗留的静态 SDF 形状/收窄 y 向渐变），
             // 带底 0.05 近 mesh 缝；两者之间 smoothstep 渐变交接。
@@ -176,7 +176,7 @@ Shader "Rainbowing/FaceSDFOverlay"
                 o.pos = UnityObjectToClipPos(v.vertex);
                 o.uv  = v.uv;
                 // 蒙皮后法线与蒙皮顶点同源（rootBone 物体空间），UnityObjectToWorldNormal
-                // 与之配对可用（实测）；颈带复制品用它对世界光向做 N·L。
+                // 与之配对可用;颈带复制品用它对世界光向做 N·L。
                 o.worldNormal = UnityObjectToWorldNormal(v.normal);
                 o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
                 o.shadowCoord = ComputeScreenPos(o.pos);
@@ -230,7 +230,7 @@ Shader "Rainbowing/FaceSDFOverlay"
                 if (soft > 0.001)
                 {
                     // 06 软档:3×3 软核,间距=v×6px(消费像素域)。满档柔和度按
-                    // 实测翻倍(3→6)。预乘对 (R,G) 一起累加,平均后 r/g 仍是
+                    // 取值为基准的两倍。预乘对 (R,G) 一起累加,平均后 r/g 仍是
                     // 覆盖率加权的平均深度;2× 超采样 RT 保证核内输入亚像素干净。
                     float2 px = (soft * 6.0) / _ScreenParams.xy;
                     float2 acc = float2(0.0, 0.0);
@@ -318,7 +318,7 @@ Shader "Rainbowing/FaceSDFOverlay"
                 if (blur < 0.01) return HairPcf4(uv, selfDepth, texel);
 
                 // 06>0:3×3 个 PCF 块,块间距随 06 拉宽 = 可调软影半径
-                // (满档柔和度按实测翻倍:系数 3→6)
+                // (满档柔和度取基准的两倍:系数 3→6)
                 float2 s = texel * (blur * 6.0);
                 float acc = 0.0;
                 for (int ky = -1; ky <= 1; ky++)
@@ -387,7 +387,7 @@ Shader "Rainbowing/FaceSDFOverlay"
 
                 // 端点钳位：sideAngle 恰为 0/1 时，可见边界是零距离等高线，直接骑在
                 // 手绘帧轮廓的原始像素锯齿上（端点折线）。把光角钳离端点 = 水位抬高而
-                // 场不动，端点处直接显示已实测平滑的"偏离 snap 度"形态。
+                // 场不动,端点处直接显示已平滑的"偏离 snap 度"形态。
                 sideAngle = clamp(sideAngle, _EndpointSnap, 1.0 - _EndpointSnap);
 
                 float bias = _ThresholdBias * 0.5;
@@ -450,10 +450,10 @@ Shader "Rainbowing/FaceSDFOverlay"
                     // C# 推 0 → attenEff=1 退回独立判光合成，两态自动切换。
                     float attenEff = lerp(1.0, saturate(attenRaw),
                                           _ShadowmapAvail * _NeckShadowCompensation);
-                    // 遮挡合入顺序：先半兰伯特、后乘 atten。游戏实测依据：开自阴影
+                    // 遮挡合入顺序:先半兰伯特、后乘 atten。依据:开自阴影
                     // 被身体挡住时朝光的表面也全暗 → 主皮肤是 ((N·L+1)/2)×atten；
                     // 若按 (N·L×atten+1)/2 合成，朝光面被遮挡时恒为 0.5（中间值），
-                    // 颈带压不到暗 → 身侧已暗、颈带还亮 → 接缝泛白（2026-08-25 实测）。
+                    // 颈带压不到暗 → 身侧已暗、颈带还亮 → 接缝泛白。
                     // 附带性质：attenEff=1 时本式与独立判光式逐位相同，
                     // _NeckRampScale/_NeckRampBias 标定不受影响。
                     // 它们是光照项标定旋钮；_NeckEdgeSoftness = smoothstep 半宽 w（钳离 0 防 NaN）。

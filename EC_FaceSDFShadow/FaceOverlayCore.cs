@@ -4,12 +4,9 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 面部 SDF 阴影的两件事：
-    /// 1) 把面部材质的 _RampG 覆盖成白图 —— 全局 ramp 阴影在脸上失效，身体/头发不受影响
-    /// 2) 追加乘算叠加材质，画 SDF 硬边阴影
-    ///
-    /// 之所以能只让脸失效：Unity 中材质自身的属性值优先于 Shader.SetGlobalTexture 设的全局值，
-    /// 而面部材质是逐角色克隆实例（CustomTextureControl.cs:28 clone=true）。
+    /// 面部 SDF 阴影的两件事:把面部材质 _RampG 覆盖成白图中和原生 ramp 阴影,
+    /// 再追加乘算叠加材质画硬边阴影。能只让脸失效是因为材质属性优先于全局值,
+    /// 而面部材质是逐角色克隆实例。身体/头发不受影响。
     /// </summary>
     internal static class FaceOverlayCore
     {
@@ -56,10 +53,9 @@ namespace EC_FaceSDFShadow
 
 #if DEBUG
         /// <summary>
-        /// [HairDiag] 发影混合架构实值:全局量一行 + 逐角色绑定一行。仅 DEBUG 构建。
-        /// 坑:材质级 GetTexture/GetVector 对未列 Properties 的 uniform 恒报
-        /// "doesn't have a property"(Set 可用、Get 不可用),绑定态必须从
-        /// HairShadowPass 渲染侧字典读,不得读材质。
+        /// [HairDiag] 发影混合架构实值,仅 DEBUG 构建。
+        /// 坑:材质级 Get 对未列 Properties 的 uniform 恒报错(Set 可用、Get 不可用),
+        /// 绑定态只能从 HairShadowPass 渲染侧字典读。
         /// </summary>
         internal static void LogHairDiag()
         {
@@ -91,12 +87,8 @@ namespace EC_FaceSDFShadow
 #endif
 
         /// <summary>
-        /// 每帧把头骨的 world→局部矩阵和表情 UV 补偿系数推给所有 overlay 材质。
-        ///
-        /// 必须每帧推、不能并进 15 帧的 Poll：阴影方向靠它算，隔帧推会让转头时阴影一跳一跳。
-        /// shader 不能用 unity_WorldToObject —— cf_O_face 是 SkinnedMeshRenderer，顶点由骨骼
-        /// 驱动，渲染器自身 transform 不跟头骨转（骨骼被重映射到共享骨架，
-        /// AssignedAnotherWeights.AssignedWeightsAndSetBoundsLoop），用它会导致转头时阴影不动。
+        /// 每帧推头骨 world→局部矩阵和表情 UV 补偿系数。必须每帧推,并进 15 帧 Poll 会让阴影跳。
+        /// shader 不能用 unity_WorldToObject:SkinnedMeshRenderer 顶点由骨骼驱动,transform 不跟头骨转。
         /// </summary>
         internal static void PushHeadMatrices()
         {
@@ -106,7 +98,7 @@ namespace EC_FaceSDFShadow
                 var mat = entry.OverlayMat;
                 if (mat == null) continue;
 
-                // 表情 UV 补偿：live 实测优先（覆盖 blendshape/FBS 联动/骨骼全部驱动源），
+                // 表情 UV 补偿:live 模式优先(覆盖 blendshape/FBS 联动/骨骼全部驱动源),
                 // 失败（模式关闭/参照未建立）回退离线系数表
                 if (!FaceLiveCompensation.Push(kvp.Key, mat, entry.HeadBone))
                     FaceBlendCompensation.Push(kvp.Key, mat);
@@ -130,10 +122,10 @@ namespace EC_FaceSDFShadow
         private static int _hairLightScansLeft;
         private static bool _hairLightWarned;
 
-        /// <summary>光空间深度门 bias(米):贴头皮斑驳 ↔ 眨眼吞影的实测折中值,定死不暴露。</summary>
+        /// <summary>光空间深度门 bias(米):贴头皮斑驳 ↔ 眨眼吞影的平衡点,定死不暴露。</summary>
         internal const float HairShadowBiasMeters = 0.005f;
 
-        /// <summary>深度门正面区容差默认值(米):实测调定值;Debug 构建经 Debug/SS_DepthTol 可调,Release 固定用本值。</summary>
+        /// <summary>深度门正面区容差默认值(米):Debug 构建经 Debug/SS_DepthTol 可调,Release 固定用本值。</summary>
         internal const float HairShadowDepthTolDefault = 0.005f;
 
         // 光空间矩阵现在逐角色写入各 overlay/mask 材质(多角色),不再 SetGlobal。
@@ -145,13 +137,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 每帧推发影几何偏移用的全局(CB 绘制不走 ForwardBase,拿不到
-        /// _WorldSpaceLightPos0):灯向/移动量程(02/03)/基础偏移(04/05)。灯只取
-        /// 相机层级下的平行光(见 IsUnderCamera),锁光插件转灯本体自动跟随;找不到
-        /// 推零向量 → 偏移 0,RT 只在头发原位有值,脸像素采不到 → 发影自动静默。
-        /// 权重/软核走 PushConfig 推给 overlay 消费端。
-        /// 多角色:灯向/形态/量程保持全局;RT/光空间三件套逐角色写材质
-        /// (材质属性优先于全局,shader 源码零改动)。
+        /// 每帧推发影几何偏移的全局量(CB 绘制拿不到 _WorldSpaceLightPos0)。灯只取相机层级
+        /// 下的平行光,找不到推零向量即自动静默。灯向/形态/量程全局,RT 与光空间三件套逐角色写材质。
         /// </summary>
         internal static void PushHairLight()
         {
@@ -190,7 +177,7 @@ namespace EC_FaceSDFShadow
             Shader.SetGlobalFloat(ShaderIDs.HairShadowForm, form);
             Shader.SetGlobalFloat(ShaderIDs.HairShadowBlur,
                 FaceSDFShadowPlugin.HairShadowSoft.Value);
-            // 深度门 bias 定死为实测折中值(0.005:贴头皮斑驳 ↔ 眨眼吞影),不暴露配置
+            // 深度门 bias 定死为平衡值(0.005:贴头皮斑驳 ↔ 眨眼吞影),不暴露配置
             Shader.SetGlobalFloat(ShaderIDs.HairShadowBias, HairShadowBiasMeters);
 
             // 逐角色推送:RT 配对绑定(两形态都要——不写即采空)
@@ -349,10 +336,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 只认挂在相机层级下的平行光:EC 里角色打光恒在相机下(捏人
-        /// CustomScene/CamBase/Camera/、其他场景 Camera/Main Camera/),锁光插件控的
-        /// 也是它;MapLight/ 是地图环境光,不该驱动发影。
-        /// 不回落"场景最亮"——ADV 场景两盏灯强度都可调,回落会在地图光调亮时跳灯。
+        /// 只认挂在相机层级下的平行光:角色打光恒在相机下,MapLight/ 是地图环境光不该驱动发影。
+        /// 不回落"场景最亮",否则地图光调亮时会跳灯。
         /// </summary>
         private static bool IsUnderCamera(Transform t)
         {
@@ -507,10 +492,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 本插件 overlay 的识别标准：shader 即 Overlay（含被 Unity 实例化的克隆体）。
-        /// 化妆切换走 renderer.materials 实例化路径会克隆整个材质数组——克隆体引用
-        /// 不同但渲染行为相同，按引用剔除会漏，克隆体与新 overlay 双重乘算=阴影
-        /// 叠加变深。shader 是私有 bundle 加载的实例，引用比较即安全。
+        /// overlay 的识别标准是按 shader 而非材质引用:化妆切换会克隆材质数组,
+        /// 按引用剔除会漏掉克隆体,导致双重乘算、阴影叠加变深。
         /// </summary>
         private static bool IsOwnedOverlayMaterial(Material mat)
         {
@@ -630,10 +613,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 取色器写入阴影色：写材质（ME 运行时真源，面板同步可见）+ 立即置 CustomizedColor
-        /// 并更新哨兵——取色器是显式定制动作，不等下一轮检测（否则窗口期内 PushConfigAll
-        /// 会拿全局值覆盖掉刚写的色）。存卡靠 OnCardBeingSaved 从材质读回。
-        /// 捏人场景单角色使用。
+        /// 取色器写入阴影色:写材质并立即置 CustomizedColor 更新哨兵,不等下一轮检测,
+        /// 否则 PushConfigAll 会拿全局值覆盖刚写的色。存卡靠 OnCardBeingSaved 从材质读回。
         /// </summary>
         internal static int ApplyShadowColorAll(Color shadowColor)
         {
@@ -655,11 +636,9 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 解锁「全局跟随 + ME 定制锁存」（取色器按钮调用）：清三属性锁存标志，
-        /// 材质直接写全局值并同步哨兵。不能复用 PushControllerConfig——它会把
-        /// _Enable 也弹回卡值，冲掉 ME 滑条未保存的开关状态；也不能走
-        /// SyncPerMaterialParams——材质当前值仍是 ME 定制值、≠哨兵，会被检测
-        /// 分支当场重新锁存。捏人场景单角色使用。
+        /// 解锁「全局跟随 + ME 定制锁存」:清三属性锁存标志,材质直接写全局值并同步哨兵。
+        /// 不能复用 PushControllerConfig(会把 _Enable 弹回卡值、冲掉 ME 未保存状态),
+        /// 也不能走 SyncPerMaterialParams(当前值≠哨兵会被当场重新锁存)。
         /// </summary>
         internal static int ResetCustomizationAll()
         {
@@ -722,14 +701,9 @@ namespace EC_FaceSDFShadow
         private static string ResolvePerCharaSdfDir(ChaInfo cha)
             => PerCharaSdfResolver.Resolve(cha);
 
-        /// 面部骨架根。骨骼链：cf_j_neck → cf_j_head → cf_s_head → p_cf_head_bone
-        /// → cf_J_N_FaceRoot → cf_J_FaceRoot → …
-        ///
-        /// 不能用 cf_j_head：它在**身体**骨架里，而 face SMR 的 bones 由
-        /// `aaWeightsHead.CreateBoneList(objHeadBone, "")` 建立（ChaControl.cs:6814），
-        /// 只收集 p_cf_head_bone 子树，cf_j_head 是其祖先、不在其中 —— 实测报
-        /// "Head bone not found"。这里取子树内最靠根、刚性跟随头部的骨骼。
-        /// 按顺序尝试，取第一个命中的（不同头部资产的层级可能有出入）。
+        /// 面部骨架根:取子树内最靠根、刚性跟随头部的骨骼。不能用 cf_j_head,它在身体骨架里,
+        /// 而 face SMR 的 bones 只收集 p_cf_head_bone 子树。按顺序尝试取第一个命中的,
+        /// 不同头部资产层级可能有出入。
         private static readonly string[] HeadBoneCandidates =
         {
             "cf_J_FaceRoot",
@@ -738,14 +712,9 @@ namespace EC_FaceSDFShadow
         };
 
         /// <summary>
-        /// 找到跟随头部旋转的骨骼，并算出「该骨骼 local → mesh 物体空间」的静态校正矩阵。
-        ///
-        /// 为什么需要校正：阈值图的 UV 模板（鼻翼/颊上标定坐标）是按 <b>mesh 物体空间</b> 定的，
-        /// 而骨骼 local 的轴向未必与之一致。bindpose 正是「物体空间 → 骨骼 local」的绑定期变换，
-        /// 取它的逆即得「骨骼 local → 物体空间」，与运行时 worldToLocal 相乘后，
-        /// 光方向就落回模板标定所在的参照系，已有标定全部继续有效。
-        ///
-        /// 解析失败返回 false，调用方让 shader 回落 unity_WorldToObject（行为退回修复前，不崩）。
+        /// 找跟随头部旋转的骨骼,算出「骨骼 local → mesh 物体空间」的静态校正矩阵。
+        /// UV 模板定在物体空间,骨骼 local 轴向未必一致,bindpose 的逆即校正项。
+        /// 解析失败返回 false,调用方回落到 unity_WorldToObject。
         /// </summary>
         private static bool ResolveHeadBone(SkinnedMeshRenderer smr, out Transform bone, out Matrix4x4 bindFix)
         {
@@ -818,10 +787,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 按配置把面部原始材质的 ramp 设为白图（中和）或还原为全局 ramp。
-        /// 用材质级 SetTexture 创建 local override：只覆盖面部材质实例，身体/头发不受影响
-        /// （_RampG 是全局属性，但 Material.SetTexture 会在该实例上建 local override）。
-        /// enable=false 时还原全局 ramp（软关闭，overlay 仍在数组里输出白）。
+        /// 按配置把面部 ramp 设为白图或还原全局。用材质级 SetTexture 建 local override,
+        /// 只覆盖面部实例,身体/头发不受影响。软关闭时还原全局 ramp,overlay 仍在数组里输出白。
         /// </summary>
         private static void SyncRamp(Entry entry, bool enable)
         {
@@ -842,12 +809,9 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 按配置排除/衰减面部实时自阴影：写 main_skin 实例的 _FaceShadowG（强度标量）。
-        /// 0=原版实时阴影；1=自阴影（自身投影）消失，**头发在脸上的投影只稍微变淡、大体保留**；
-        /// 中间值=部分衰减。机制与 _RampG 相同：SetFloat 静默建 local override，
-        /// 只影响面部材质实例，身体/头发不受影响（实测证实）。
-        /// 游戏 C# 从不回写该属性（ItemShader.cs:153/158 只声明 ID）。
-        /// enable=false（软关闭/总开关关）时还原 0 = 完全回到原版。
+        /// 按配置排除/衰减面部实时自阴影:写 main_skin 实例的 _FaceShadowG(0=原版,1=自阴影消失,
+        /// 中间值部分衰减)。机制同 _RampG,只影响面部实例;游戏 C# 从不回写该属性。
+        /// 软关闭时还原 0。
         /// </summary>
         private static void SyncFaceShadowG(Entry entry, bool enable)
         {
@@ -862,11 +826,9 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 脖颈干净底色：跟随 General 00_Enabled 主开关（× 逐角色 _Enable 软关），
-        /// 与 HairShadow 00_ShadowEnabled 无关——底色是颈带复制品正确工作的前提，
-        /// 收窄后关发影开关不会连带还原底色。软关闭/卸载还原 receiveShadows=true。
-        /// 幂等重写（Poll 自愈，换头重建后也覆盖）。注意与 ME 的 receiveShadows
-        /// 归属：生效期间 ME 面板的同名开关会被每轮轮询压回。
+        /// 脖颈干净底色:跟随 General 主开关,与发影开关无关——底色是颈带复制品正确工作的前提。
+        /// 幂等重写(Poll 自愈,换头重建后也覆盖),生效期间 ME 面板的 receiveShadows 会被压回。
+        /// 软关闭或卸载时还原 receiveShadows=true。
         /// </summary>
         private static void SyncReceiveShadows(SkinnedMeshRenderer smr, bool enable)
         {
@@ -875,7 +837,7 @@ namespace EC_FaceSDFShadow
 
             // FaceNoSelfCast：屏幕空间阴影图分不出投影来源，脸自投影回来是纯黑；
             // cast=Off 从源头切掉且外部投影保留。ShadowsOnly 会使 renderer 整个
-            // 隐形（用户实测），禁止使用。
+            // 隐形,禁止使用。
             if (enable && FaceSDFShadowPlugin.FaceNoSelfCast.Value)
                 smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             else
@@ -923,13 +885,9 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 02/04/05 全局跟随 + ME 定制锁存的唯一检测/推送入口（Poll 已注册路径与
-        /// PushConfigAll 都走这里，漏一条会出现"scene 生效、config 变更不生效"式半坏）：
-        /// 材质当前值≠哨兵 → 被 ME/取色器改过 → 置 Controller.Customized* 一次性锁存
-        /// （永不自动解锁）+ 哨兵←当前值，本轮不推全局；值相等且未定制 → 材质值≠全局值
-        /// 才写全局，哨兵同步。回推只发生在"值==哨兵"时，不会覆盖 ME 刚写的值
-        /// （ME 写完即不等，转入锁存分支）。
-        /// 返回 entry 是否被修改（struct 拷贝，调用方需写回 _registry）。
+        /// 02/04/05 全局跟随与 ME 定制锁存的唯一检测/推送入口,Poll 与 PushConfigAll 都走这里。
+        /// 材质值≠哨兵即视为被定制,置 Customized 一次性锁存并更新哨兵,本轮不推全局;
+        /// 值相等且未定制才回推全局。返回 entry 是否被修改(struct 拷贝,调用方需写回)。
         /// </summary>
         private static bool SyncPerMaterialParams(ref Entry entry)
         {

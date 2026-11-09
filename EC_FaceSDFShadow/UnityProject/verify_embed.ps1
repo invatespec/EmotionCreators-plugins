@@ -5,6 +5,7 @@
 chcp 65001 > $null
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
+# UnityProject → EC_FaceSDFShadow(插件根) → plugin → 仓库根
 $pluginDir = Split-Path -Parent $PSScriptRoot
 $repoRoot  = Split-Path -Parent (Split-Path -Parent $pluginDir)
 $Dll    = Join-Path $repoRoot 'bin/BepInEx/plugins/EC_FaceSDFShadow/EC_FaceSDFShadow.dll'

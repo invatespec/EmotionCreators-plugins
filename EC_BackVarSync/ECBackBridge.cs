@@ -9,7 +9,7 @@ namespace EC_BackVarSync
 {
     /// <summary>
     /// EC_back 联动桥：反射缓存其公开静态状态，按名 patch 三个存/读/清入口。
-    /// EC_back 未安装或方法改名时自动降级；挂接依据见 research/ec-back-hook-points.md。
+    /// EC_back 未安装或方法改名时自动降级。
     /// </summary>
     internal sealed class ECBackBridge
     {

@@ -10,7 +10,7 @@ namespace EC_BackVarSync
 {
     /// <summary>
     /// EC_VariableMod 反射桥：快照/恢复全局变量与二维数组。
-    /// 挂接目标均为公开静态或实例字段，无 DLL 引用（沿用已实测的反射路径）。
+    /// 挂接目标均为公开静态或实例字段,无 DLL 引用。
     /// </summary>
     internal sealed class VariableModBridge
     {

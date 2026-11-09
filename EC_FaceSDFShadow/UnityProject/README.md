@@ -20,7 +20,7 @@ shader 每次改动都要重跑一遍。
 无头构建，不需要开 Unity 编辑器：
 
 ```bash
-"path/to/your/2017.4.24f1" \
+"path/to/Unity/Editor/Unity.exe" \
   -batchmode -quit \
   -projectPath ./plugin/EC_FaceSDFShadow/UnityProject \
   -executeMethod BuildBundle.Build \

@@ -5,25 +5,9 @@ using System.Reflection;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 运行时向 MaterialEditor 注入 Rainbowing/FaceSDFOverlay 的可调属性（专属桶）。
-    ///
-    /// 为什么用反射而非直接引用：本插件不依赖 ME 程序集（csproj 无 reference）；
-    /// ME 也可能未安装，此时静默跳过，功能仍由 00_Enabled 全局开关保底。
-    ///
-    /// 桶内必 push：Enable(Float, Range 0~1) + ShadowColor(Color) +
-    /// ThresholdBias/SoftnessAngle(Float 滑条)。
-    /// - Enable：ME 写回 SetFloat("_Enable")，shader 内 _Enable<0.5 输出白=软关闭。
-    ///   Float 带 Range 渲染成滑条（Keyword toggle 的反射注入 ctor 跨程序集绑定太脆，不用）。
-    /// - ShadowColor：进专属桶后 UI.cs:677 只取这一个桶不再回退 default，
-    ///   必须一起登记否则原靠 default 桶列出的调色能力丢失。
-    /// - 两个形态参数：逐角色定制阴影分界/边缘，Range 与 Config AcceptableValueRange 一致。
-    ///
-    /// 核心时序坑：必须先备好所有反射对象，再写桶，再刷新，
-    /// 刷新后验证 PropertyOrganizer.PropertyOrganization 真含本键；不含则回滚桶，
-    /// 否则 UI.cs:677 走专属桶却取不到 → KeyNotFoundException（比"没登记走 default"更糟）。
-    ///
-    /// 未安装 vs 未加载：baseType==null（AppDomain 无该类型）=未安装→永久放弃；
-    /// baseType 有但 ME 刚启动字段未就绪=未加载→本轮放弃但不设永久标志，下轮重试。
+    /// 反射向 MaterialEditor 注入 FaceSDFOverlay 专属属性桶,不引用 ME 程序集。
+    /// 时序约束:备好反射对象→写桶→刷新→校验含本键,不含则回滚,否则 UI 会抛 KeyNotFoundException。
+    /// baseType 为 null 即 ME 未安装。
     /// </summary>
     internal static class MaterialEditorRegistry
     {
@@ -156,11 +140,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 定位 ShaderPropertyType 枚举。它嵌在 MaterialAPI 类里
-        /// （MaterialAPI.cs:10 class MaterialAPI + :877 enum ShaderPropertyType），
-        /// 反射全名是 MaterialEditorAPI.MaterialAPI+ShaderPropertyType（嵌套类用 + 分隔，
-        /// 不是 .）。先按该全名精确找；失败再跨 assembly 所有类型扫 IsEnum 兜底，
-        /// 避免 ME 升级改嵌套位置/命名细节再踩空。
+        /// 定位 ShaderPropertyType 枚举,它嵌套在 MaterialAPI 里,反射全名用 + 分隔而非点号。
+        /// 先按全名精确查找,失败再跨 assembly 扫 IsEnum 兜底,避免 ME 改嵌套位置后踩空。
         /// </summary>
         private static Type FindShaderPropertyType(Assembly asm)
         {

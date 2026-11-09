@@ -6,11 +6,9 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 向 ME 注入标记 shader 的白名单条目(LoadedShaders + XMLShaderProperties),
-    /// 使其出现在 Change Shader 列表且可被 ME 读卡恢复。反射而非强引用:
-    /// ME 未装/成员不符时降级禁用饰品受影,其余功能不受影响。Start 注入一次即可——
-    /// BepInEx 链式加载完成后 ME 程序集必已就绪;ME 的 LoadXML 只写具体键不清字典,
-    /// 注入条目不会被洗掉。
+    /// 反射向 ME 注入标记 shader 的白名单条目,使饰品头发能被 ME 识别并逐角色保存开关。
+    /// ME 未装或成员不符时降级为禁用饰品受影,其余功能不受影响。
+    /// Start 注入一次即可,ME 的 LoadXML 只写具体键不清字典。
     /// </summary>
     internal static class MaterialEditorMarker
     {

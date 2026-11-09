@@ -6,29 +6,9 @@ using UnityEngine.Rendering;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 头发独占投影(发影):头发在屏幕域百分比位移(方向=光向屏幕投影反向,幅度=偏离
-    /// 视轴角线性百分比,3/4 行程饱和;量程=02/03)后渲进与主相机同视角的屏幕分辨率 RT
-    /// (R=预乘眼深,G=覆盖率);overlay 在像素自身位置单点采样+单侧深度门(拒背光假影)。
-    ///
-    /// 位移放几何侧而非采样侧:偏移采样有出屏截断/斜截两类结构墙,几何侧平移由视锥
-    /// 裁剪天然连续。RT 的 ZWrite 塌缩 overlap+消费端 3×3 软核(06)+max 融合 =
-    /// 柔边/单值/强度标定;直画乘算不可行:overdraw 连乘加深、多影形状叠加、
-    /// 双环渐变在细发条上不可达。
-    ///
-    /// 光向:C# 每帧推 _HairLightDir(只认相机层级下的平行光,FaceOverlayCore.PushHairLight);
-    /// 锁光(EC_LightingEnhance SyncCamera)转的是灯光本体,每帧重推自动跟随。
-    ///
-    /// 渲染:CB 挂单相机 BeforeForwardOpaque(每帧重画 RT)。场景里另有渲角色的
-    /// 'Correct' 相机(画面校正链),实测其输出不进最终画面,挂它=无影——
-    /// 只挂 Camera.main,兜底取非 Correct 的第一个 mask 命中相机。
-    ///
-    /// 已否决路线(禁止复活):
-    /// - 头前正交 mask 相机:狗牙=光栅化 mask 采样率硬墙(留档分支 feat/hair-shadow-jfa)。
-    /// - 偏移点采 RT:采样侧出屏/深度窗错配两类结构墙。
-    /// - 直画乘算:无 overdraw 塌缩,加深/多影;双环软边不可达。
-    ///
-    /// 形态 01:0=上述屏幕位移;1=光空间正交深度(自建 shadow map,pass 1)——
-    /// 影贴脸起伏、随光向转、与镜头解耦,矩阵与采样约定见 FaceOverlayCore.BuildLightSpaceFrame。
+    /// 头发独占投影:屏幕域位移后渲进同视角 RT,overlay 单点采样+单侧深度门。
+    /// 位移必须放几何侧,采样侧偏移会出现出屏截断与深度窗错配;直画乘算无 overdraw
+    /// 塌缩,多影会连乘加深。只挂 Camera.main,'Correct' 相机输出不进最终画面。
     /// </summary>
     internal static class HairShadowPass
     {
@@ -70,8 +50,8 @@ namespace EC_FaceSDFShadow
 
         /// <summary>
         /// 一个 DrawRenderer 单元:renderer + submesh 序号 + 该 submesh 的遮罩材质。
-        /// 多材质头发(本体+挑染+饰件)每个 submesh 各有自己的发丝纹理,只画 submesh 0
-        /// 会静默丢形状。Owner=该角色 rendFace SMR,RT 与矩阵按它配对(核心不变量)。
+        /// 多材质头发每个 submesh 纹理不同,只画 submesh 0 会静默丢形状。
+        /// Owner=该角色 rendFace SMR,RT 与矩阵按它配对。
         /// </summary>
         private struct MaskDraw
         {
@@ -117,15 +97,9 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 收集参与发影的头发 renderer,按角色分组。本体头发只取 cha.cusHairCmp[].rendHair[]
-        /// ——构造上就是头发,不按名字/shader 名二次过滤(命名过滤会误杀不含 hair 字样的
-        /// MOD 头发,且静默无日志);另收饰品槽里挂 ME 标记 shader 的 renderer(见
-        /// CollectMarkedAccessories)。归属键=该角色的 rendFace SMR(消费端 _registry 同键)。
-        ///
-        /// 固定仅前发。机制理由:后发一旦入镜,它的偏移
-        /// 覆盖就落在脸上,后发的影子会糊到脸侧/下颌——脸前发影的语义是"额前遮挡"。
-        /// 该过滤只管本体头发 kind,被标记的饰品不受过滤(标记即玩家意志)。
-        /// rendFace 解析不到的角色整体跳过:没有配对键,画了也没人消费。
+        /// 收集参与发影的头发 renderer,按角色分组,归属键是该角色的 rendFace SMR。
+        /// 本体头发按构造取,不按名字过滤(会误杀 MOD 头发且静默无日志);另收挂 ME 标记
+        /// shader 的饰品。只取前发:后发入镜会糊到脸侧下颌。rendFace 解析不到的角色跳过。
         /// </summary>
         private static List<CharaGroup> CollectHairRenderers()
         {
@@ -300,7 +274,7 @@ namespace EC_FaceSDFShadow
             cb.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
             _cb = cb;
 
-            // 只挂单相机:场景里另有渲角色的 'Correct' 相机,实测其输出不进最终
+            // 只挂单相机:场景里另有渲角色的 'Correct' 相机,其输出不进最终
             // 画面(挂它=无影);RT 只需主相机视角,单相机重画最稳
             var layers = new HashSet<int>();
             foreach (var g in groups)
@@ -390,10 +364,9 @@ namespace EC_FaceSDFShadow
         private static readonly int LightBoxID = Shader.PropertyToID("_HairLightBox");
 
         /// <summary>
-        /// 把一个角色的光空间矩阵刷进**该角色**的所有遮罩材质(形态 B)。
-        /// 每帧由 FaceOverlayCore.PushHairLight 按角色调用——矩阵随灯/头每帧变,
-        /// 且各角色矩阵不同(统一刷最后角色帧值=其余角色 RT 全黑无影)。
-        /// 渲染/采样两侧同角色同帧同值=核心不变量。
+        /// 把光空间矩阵刷进该角色的所有遮罩材质(形态 B)。矩阵随灯与头每帧变,
+        /// 各角色互不相同,统一刷同一份会让其余角色 RT 全黑无影。
+        /// 渲染与采样两侧必须同角色同帧同值。
         /// </summary>
         internal static void PushMaskMatrices(SkinnedMeshRenderer owner,
             FaceOverlayCore.LightSpaceFrame frame)
@@ -410,11 +383,9 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 取(或建)一个角色的 mask RT。规格规则:LightSpace=方形光空间盒,边长取 07
-        /// (与镜头分辨率无关);ScreenSpace=06 0=锐边(全分辨率 RT 单点采样)/
-        /// >0=软边(2× 超采样 RT + 消费端 3×3 软核)。纯 2× 超采样实测只把狗牙磨成
-        /// AA 级锐边,肉眼难辨——可见柔边由软核给出,RT 的 2× 保证核内输入亚像素干净。
-        /// 预乘编码下超采样/软核双线性安全(清屏(0,0)平均仍无发)。
+        /// 取(或建)一个角色的 mask RT。LightSpace 用方形光空间盒,边长与镜头分辨率无关;
+        /// ScreenSpace 软度为 0 时全分辨率单点采样,大于 0 时 2× 超采样 + 消费端 3×3 软核。
+        /// 纯 2× 超采样只能到 AA 级锐边,可见柔边由软核给出。
         /// </summary>
         private static RenderTexture EnsureRenderTarget(SkinnedMeshRenderer face)
         {
@@ -466,17 +437,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 为一个 renderer 的每个 submesh 各建一份遮罩材质,追加进 draws。
-        /// owner=该角色的 rendFace SMR,RT/矩阵按它配对。
-        ///
-        /// submesh 逐个建:Unity 用 sharedMaterials[i] 画 submesh i,多材质头发
-        /// (本体/挑染/饰件)只画 submesh 0 会静默丢形状。
-        ///
-        /// 原版 EC 头发没有可用的发丝 alpha——形状 100% 由几何(多边形发片)构成:
-        /// main_hair 系 RenderType=Opaque、无 _Cutoff;发图 alpha 恒 255;材质
-        /// _MainTex 恒 null(HasProperty 为 true、GetTexture 为 null,Set/Get 不对称)。
-        /// MOD 卡片式头发(真挂了 _MainTex)才走 alpha test——那种情况不裁剪
-        /// 反而会渲成矩形。
+        /// 为 renderer 每个 submesh 各建一份遮罩材质。原版 EC 头发形状全由几何构成,_MainTex
+        /// 恒 null、alpha 恒 255,不能按 alpha test 裁剪;MOD 卡片式头发不裁剪反而渲成矩形。
         /// </summary>
         private static void BuildDraws(Shader maskShader, Renderer r,
             SkinnedMeshRenderer owner, List<MaskDraw> draws)
@@ -608,10 +570,8 @@ namespace EC_FaceSDFShadow
         internal static bool DiagShowRT;
 
         /// <summary>
-        /// 只能走 IMGUI:CB 内 Blit 在本链路失效、ReadPixels 读回实测不可靠。
-        /// GUI 坐标 y 向下,画面相对 RT 上下相反,别拿它判翻转;ScaleToFit 保方形不变形,
-        /// 拉伸会让"发顶是否顶出盒"看不准。R=米制深度(>1 溢出成白),有发白/黄、无发黑。
-        /// 多角色:第一张全屏,其余等宽并列在下方(够看位置即可)。
+        /// 只能走 IMGUI:CB 内 Blit 在本链路失效、ReadPixels 读回不可靠。R 是米制深度,
+        /// 有发显示白或黄、无发为黑。必须 ScaleToFit 保持方形,拉伸会让发顶是否顶出盒判不准。
         /// </summary>
         internal static void DrawDiagOverlay()
         {
@@ -635,10 +595,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// [HairMatDump] DEBUG:枚举头发材质**实际拥有**的贴图/浮点属性。
-        /// 回答"发丝 alpha 存在哪个属性"——原版头发材质没有 _MainTex,按它假设
-        /// 会让遮罩退化(见 BuildDraws 注释)。候选表覆盖 ChaShader 定义的贴图属性
-        /// + 常见 cutout 命名;HasProperty 为真才打印,免刷屏。
+        /// [HairMatDump] DEBUG:枚举头发材质实际拥有的贴图/浮点属性,用于确认发丝 alpha 存在哪个属性。
+        /// 候选表覆盖 ChaShader 定义与常见 cutout 命名,HasProperty 为真才打印。
         /// </summary>
         internal static void DebugDumpHairMaterials()
         {

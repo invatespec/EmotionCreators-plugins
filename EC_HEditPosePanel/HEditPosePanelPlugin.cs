@@ -825,7 +825,7 @@ namespace EC_HEditPosePanel
         }
 
         // HEdit 主场景 IK 调态路径:LoadSceneName==HEditScene 且未叠加 PoseCreate(叠加时 PoseCreate 路径优先,互斥)。
-        // 真机实测:HEditScene 是大类,仅判 LoadSceneName 节点编辑等子态也 true → 窗口常显。
+        // HEditScene 是大类,只判它会让节点编辑等子态也 true → 窗口常显,须再判 LoadSceneName。
         // 真判定 = HEditGlobal.objectCategoryBehaviour 里 MotionSetting(lstObj[3]) 或 PartInfoSetting(lstObj[6]) active(=动作设置态)。
         internal static bool IsInHEditIK()
         {
@@ -833,7 +833,7 @@ namespace EC_HEditPosePanel
             var sc = Singleton<Scene>.Instance;
             if (sc == null || sc.LoadSceneName != "HEditScene") return false;
             if (sc.AddSceneName == "PoseCreate") return false;
-            if (sc.IsNowLoading || sc.IsNowLoadingFade) return false;   // 加载/淡入途不判(实测避免 MotionSetting 先激活又切走导致窗口闪现一帧)
+            if (sc.IsNowLoading || sc.IsNowLoadingFade) return false;   // 加载/淡入途不判(避免 MotionSetting 先激活又切走导致窗口闪现一帧)
             if (!Singleton<HEdit.HEditGlobal>.IsInstance()) return false;
             var hg = Singleton<HEdit.HEditGlobal>.Instance;
             if (hg == null || hg.objectCategoryBehaviour == null) return false;

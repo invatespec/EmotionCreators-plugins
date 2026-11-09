@@ -3,36 +3,10 @@
 面部 SDF 硬边阴影插件。在角色脸上叠一层随光照旋转扫掠的硬边阴影，
 得到赛马娘/原神那类动漫风格的明暗分界。
 
-**当前状态：v2.0.0。需要先构建 shader bundle 才能运行。**
+**运行前需要先构建 shader bundle。**
 
 > 普通游戏用户请看 **[USAGE.md](USAGE.md)**（只讲用法）；
 > 本 README 面向开发/维护者，含实现契约与机制说明。
-
-## 版本史（仅保留各版本引入的现役能力）
-
-- **v0.6~v0.11**：逐角色配置（ESF 扩展数据，多角色独立生效）；阈值图精简为手绘
-  角度帧单一路径；颈带 N·L 复制品 crossfade 补 pitch 响应；全局参数持续跟随 +
-  ME 定制锁存；取色器光强对齐。
-- **v1.0.0**：首个正式版，默认值实测定标；USAGE.md 与手绘帧图例模板。
-- **v1.1.0**：颈带阴影融合——复制品消费游戏真实阴影（先半兰伯特后乘遮挡），
-  治缝两侧叠加过黑；代价：主域原生投影被清干净（颈带内由插件恢复）。机制见
-  `docs/ec-knowledge/04-troubleshooting/overlay-native-shadow-stacking.md`。
-- **v1.2~v1.3**：全脸遮挡恢复实验（审美否决，v2.0.0 移除）；发影 v2 混合架构
-  （屏幕域 clip 位移 + RT 接收 + 单侧深度门 + max 融合）。
-- **v1.4.0**：发影形态 B（光空间真投影，自建 hair-only shadow map，影贴真实
-  脸 mesh、随光向与镜头解耦）+ 多角色逐主体 RT/矩阵隔离。
-- **v1.5.0~v1.5.1**：饰品头发参与发影（ME 哑 shader 标记，材质级玩家意志随卡
-  持久化）；深度门单侧软化窗（眨眼吞影修复）。
-- **v2.1.0（当前）**：形态 A 深度门掠射感知——消费端按 NdV 把容差在侧脸轮廓带
-  自动收紧到正面区约 1/30，拒掉被脸挡住的远侧贴脸侧发穿透影；正面区容差默认
-  0.005 米（Debug 构建经 Debug 组 `SS_DepthTol` 可调，Release 固定）。
-- **v2.0.0**：配置大改——发影项移入独立 **HairShadow** 栏重排
-  （`00_ShadowEnabled` 默认开 / `01_Form` 枚举 ScreenSpace/LightSpace /
-  `02~05_SS_*` 屏幕空间四件 / `06_Soft` 合并连续滑条 / `07_LS_Resolution`）；
-  删 `09_FaceOcclusionRestore`（审美否决）、`19_HairShadowParts`（固定前发）、
-  `22_HairShadowBias`（常量化 0.005）；干净底色与 `FaceNoSelfCast`（Advanced 节）
-  跟随 General 主开关；Advanced 节 `DisplayPreset` 显示模式一键预设（标定于
-  阴影密度 0.55）。pitch 渐暗门：光仰角进入头轴 37° 锥内渐变全暗（顶/底对称）。
 
 ## 工作原理
 
@@ -50,12 +24,12 @@ EC 脸上除了 ramp 阴影，还有一层 Unity 实时自阴影（`SHADOWS_SCRE
 **强度标量**：0=原版实时阴影，1=最强排除，中间值连续衰减。
 
 - **设 1**：脸上自阴影（鼻侧/颊侧等自身投影）消失，只剩 SDF 硬边阴影；
-  **头发在脸上的投影只稍微变淡、大体保留**（实测，正是想要的折中效果）
+  **头发在脸上的投影只稍微变淡、大体保留**
 - **设中间值（如 0.5）**：自阴影压淡、头发投影保留更多
 - **设 0**：原版行为，不做任何改动
 
-机制与 `_RampG` 相同：`SetFloat` 建材质实例 local override，只影响面部材质，身体/头发不受影响
-（实测证实）。逐角色软关闭（ME `Enable` 滑条拉 0）时自动还原 0=原版。
+机制与 `_RampG` 相同：`SetFloat` 建材质实例 local override，只影响面部材质，身体/头发不受影响。
+逐角色软关闭（ME `Enable` 滑条拉 0）时自动还原 0=原版。
 
 ### 为什么能"只让脸没有原版阴影"
 
@@ -70,8 +44,7 @@ EC 的 ramp 阴影由 `Shader.SetGlobalTexture(_RampG, tex)` 设的**全局**贴
 > 会在该材质实例上建一个 **local override**，只影响这个材质，身体/头发不受影响。
 > 注意 `Material.GetTexture` 会因属性未声明报错，但 `SetTexture` 静默建 override——
 > Set/Get 不对称，不要因"诊断说没这个属性"就放弃。切勿改成 `Shader.SetGlobalTexture`，
-> 那会连身体一起中和。详见知识库
-> [角色材质叠加层模式](../../docs/ec-knowledge/03-patterns/character-material-overlay-pattern.md)。
+> 那会连身体一起中和。
 
 ## 逐角色配置（ESF 扩展数据）
 
@@ -81,8 +54,8 @@ Enable 与 ShadowColor 存到角色卡扩展数据（ESF），多角色场景各
 - **逐角色开关**：在 MaterialEditor 面板调整 `FaceSDFOverlay` 的 `Enable` 滑条（0=关闭、1=开启），
   保存角色卡即生效。关闭时显示**原版阴影**（不是一片白），身体/头发不受影响
 - **逐角色调色**：在 MaterialEditor 调整 `ShadowColor`（或取色器应用），保存角色卡后下次
-  加载自动恢复；该属性从此锁定为本卡自己的值，不再受全局 `02_ShadowColor` 影响（v0.10 起，
-  未定制过的卡则实时跟随全局）
+  加载自动恢复；该属性从此锁定为本卡自己的值，不再受全局 `02_ShadowColor` 影响，
+  未定制过的卡则实时跟随全局
 - **逐角色自定义 SDF**（EC_Profile 描述指令指定，不存本插件卡数据）：见下节
 - **总开关**：`00_Enabled` 关闭时强制禁用所有角色（全局兜底）
 - **兼容性**：卸载插件不丢配置（ESF 保留），重装恢复；无插件环境角色卡正常加载不损坏场景
@@ -112,7 +85,7 @@ Enable 与 ShadowColor 存到角色卡扩展数据（ESF），多角色场景各
 
 ### 依赖
 
-v0.6.0 起依赖前置插件（游戏通常已装）：
+依赖前置插件（游戏通常已装）：
 - `EC_BepisPlugins/EC_ExtensibleSaveFormat.dll`（ESF 角色卡扩展数据）
 - `EC_Plugins/ECAPI.dll`（KKAPI 的 EC 移植版，提供 CharaController）
 - `EC_Profile`（可选，软依赖）：只有用逐角色自定义 SDF 指令时才需要
@@ -121,7 +94,7 @@ v0.6.0 起依赖前置插件（游戏通常已装）：
 
 `main_skin` 承载 ramp、描边、detail normal、liquid、高光、三层 overtex，
 且无源码。重写必然与身体对不上色，还会和 MaterialEditor 打架。
-其 `_ShadowColor` / `ShadowExtend` / `rimV` 实测均无法关闭 ramp 阴影
+其 `_ShadowColor` / `ShadowExtend` / `rimV` 均无法关闭 ramp 阴影
 （`ShadowExtend` 只影响嘴唇）。
 
 ## 安装
@@ -156,9 +129,9 @@ v0.6.0 起依赖前置插件（游戏通常已装）：
 | 05_SoftnessAngle | 3 | 阴影边缘软化（角度，°）。角度域恒定，不随镜头距离变化；0=硬边。跟随/锁存语义同 02 |
 | 07_FaceRealtimeShadowG | 1 | **面部实时自阴影排除强度**（见下节）。0=原版行为；1=排除自阴影（默认，SDF 硬边阴影取代脸部原生自阴影） |
 
-#### 全局跟随与 ME 定制锁存（v0.10.0）
+#### 全局跟随与 ME 定制锁存
 
-02/04/05 的语义从"仅新角色初始值"改为**持续生效 + ME 定制豁免**：
+02/04/05 **持续生效 + ME 定制豁免**：
 
 - **未定制的卡**（旧卡默认如此）：属性实时跟随全局配置。scene 里没有 ME 界面，
   直接调 ConfigurationManager 的 02/04/05 即时改到所有未定制角色；maker 内同理。
@@ -167,13 +140,13 @@ v0.6.0 起依赖前置插件（游戏通常已装）：
   （卸载重装、换机器不丢）。三个属性独立锁存：只改过 ShadowColor 的卡，04/05 仍跟随全局。
 - 判定方式是哨兵检测（插件每 15 帧比对材质当前值与上次写入值），不查 ME 内部数据。
   ME 打开面板时若重放属性值也会触发锁存——"ME 有记录 = 定制过"，语义上可接受。
-- 解锁方式（v1.0.0 起）：捏人界面取色器窗口的「恢复跟随全局（清除本卡定制）」按钮——
+- 解锁方式：捏人界面取色器窗口的「恢复跟随全局（清除本卡定制）」按钮——
   清当前角色三项锁存并把材质推回全局值，保存角色卡后生效（ME 滑条的 Enable 等未保存
   状态不受影响）。在 ME 里把值改回全局值是不够的（标志仍锁存）。
 
 #### 阴影取色器
 
-捏人界面按 `F7` 呼出 IMGUI 工具窗，从实测色反算 `_ShadowColor`，免去手工凭感觉调色。
+捏人界面按 `F7` 呼出 IMGUI 工具窗，从当前画面色反算 `_ShadowColor`，免去手工凭感觉调色。
 渲染管线含非线性环节（后处理），一步解析解不保证精确命中，工具提供**迭代校准**逐轮逼近：
 
 1. 在 MaterialEditor 把 `Enable` 滑条拉到 **0**（软关闭，回原版）→ 点 **S 的"取色"**，
@@ -189,7 +162,7 @@ v0.6.0 起依赖前置插件（游戏通常已装）：
 `alpha = 1-min(m)`、`C = (m-min(m))/(1-min(m))`；校准：`m ← m × linear(S)/linear(V)`。
 换光照基本不用重算（比值抵消光照），换角色（ramp 不同）需重取 S/P。
 
-**光强对齐选框**（v0.11）：捏人界面的 direct light 固定 intensity 1.0（CvsDrawCtrl 的
+**光强对齐选框**：捏人界面的 direct light 固定 intensity 1.0（CvsDrawCtrl 的
 光照滑条只有角度、无强度），比 advscene 常用的 0.9 亮，直接取色会让反算色偏亮、
 与 advscene 实际呈现对不上。取色前勾上「对齐 ADV 光强（0.9）」，取色器会把该灯
 压到 0.9 再取样；**勾上仅影响取色环境**，取消勾选/关窗/切出场景自动还原原值，
@@ -209,7 +182,7 @@ v0.6.0 起依赖前置插件（游戏通常已装）：
 | NeckReplicaCap | 1 | 颈带复制品压黑上限。自阴影开 + 底光时，复制品压到全黑会叠在引擎 receive_shadows 投影上成双层全黑分割线（下颚→颈上段）；调低本项只减淡这层压黑、原生投影层次透出来。光从上方/侧面时 1-neckLit 本就低于上限、行为不变，非逐方向补丁。1 = 与不设限逐位一致。纯显示参数，改值即生效、不重烘焙 |
 | NeckShadowCompensation | 1 | 颈带复制品真实阴影消费权重（阶段 2 A2）。**须配合主开关 `00_Enabled`（清底色）**：底色被清干净后，复制品采样屏幕空间阴影图、把遮挡合进光能再过阴影曲线（与身体单次着色同构，全程乘算、因子 ≤1，无 A1 除法方案的 HDR 过驱风险）。0 = 旧式合成（N·L 独立判光）。自阴影关时阴影图未绑定、C# 推 `_ShadowmapAvail=0`，两式同值。纯显示参数，改值即生效、不重烘焙 |
 
-### HairShadow（v2.0.0 起独立栏）
+### HairShadow
 
 干净底色契约：插件生效期间（General 主开关 × 逐角色 ME 开关）face renderer 的 `receiveShadows` 恒为 false——白 ramp 消不掉底色上的原生投影，必须从 renderer 层清掉，颈带由插件全权负责；主开关关闭/软关/卸载还原。开启期间 ME 面板的同名 renderer 开关会被轮询压回。**该行为没有独立配置项，不受 00_ShadowEnabled 影响。**
 
@@ -224,13 +197,13 @@ v0.6.0 起依赖前置插件（游戏通常已装）：
 | 06_Soft | 0.25 | **软边（原 17+21 合并为连续滑条）**：ScreenSpace 下 0=锐边（全分辨率 RT 单点采样）、>0=**2× 超采样 RT + 消费端 3×3 软核**，核间距=值×6px；LightSpace 下 PCF 块间距=值×6texel（0=单块）。RT 倍率只在跨 0 时重建，中间值即时推送 |
 | 07_LS_Resolution | 2048 | LightSpace 专属：阴影图边长。1024=低（≈8MB）/ 2048=中（≈32MB，默认）/ 4096=高（≈128MB），显存按角色数线性（原 23 号） |
 
-深度门 bias 定死为 0.005 米（C# 常量 `HairShadowBiasMeters` 每帧推送）：贴头皮碎斑 ↔ 眨眼吞影的实测折中，不暴露配置。
+深度门 bias 定死为 0.005 米（C# 常量 `HairShadowBiasMeters` 每帧推送）：贴头皮碎斑 ↔ 眨眼吞影的平衡点，不暴露配置。
 已删除：`09_FaceOcclusionRestore`（全脸遮挡恢复，审美否决，shader 侧恢复分支一并清除）、`19_HairShadowParts`（部件档位固定为前发——后发入镜会把影子糊到脸侧/下颌；饰品 shader 标记收集不受影响）、`07_LS_Bias`（见上，定死常量）。发影参与渲染的部件 = 前发 + 被 ME 标记的饰品。
 
 阈值图只支持 `cf_O_face` 与 `cf_O_face_SphN`，两者共用已验证一致的 UV 布局。
 取图链只有两级：`SDF/` 下的角度帧 → 同目录 `SDF/SDF.png`。**都拿不到就整层不生效**。
-v0.7 移除了两条旧来源——代码生成的固定 UV 鼻翼/颊上模板，以及 8 位
-`<mesh>_structured.png`，两者实测都把三角光和鼻影画成圆圈。
+代码生成的固定 UV 鼻翼/颊上模板与 8 位 `<mesh>_structured.png` 两条旧来源已移除，
+两者都会把三角光和鼻影画成圆圈。
 运行时贴图常驻 `RGBAHalf`，避免 8 位阈值量化造成旋转分层。
 
 **帧必须直接放在该目录下**：扫描不递归子目录（放进 `_orig/` 之类会被忽略），
@@ -244,7 +217,7 @@ v0.7 移除了两条旧来源——代码生成的固定 UV 鼻翼/颊上模板�
 降采样到 1024，小于 1024 或非方图会拒绝并继续既定回退链。文件名**必须是纯数字**
 （如 `0.png`、`8.png`），不带任何前缀。
 
-帧语义（双边界受光窗口，2026-08-19 起）：白色 = 受光、黑色 = 阴影，只需画**左光**一套
+帧语义（双边界受光窗口）：白色 = 受光、黑色 = 阴影，只需画**左光**一套
 （右光由 UV 水平镜像得到）。每个 texel 被提取成一个受光窗口 `[lo, hi]`：光照
 sideAngle 落在窗口内 = 受光，窗口外 = 阴影——「暗→亮→暗」的双峰时序（如下颚带：
 正面暗、侧光亮、背面暗）是合法输入。通道打包（R/B=右光 hi/lo、G/A=左光 hi/lo）
@@ -264,10 +237,10 @@ sideAngle 落在窗口内 = 受光，窗口外 = 阴影——「暗→亮→暗�
 chart 数、transition 数、distance/total ms 和 fallback 数；默认 raw 路径不变。
 
 如果只提供外部 `SDF.png`，当前插件按其 `0..90°` 归一化约定乘 `0.5` 转为 mode 2 的 `0..180°`
-阈值；该 fallback 尚未通过 90° 端点验收（输入最大灰度平台的 after-last-frame 语义未定），因此推荐
-同时保留状态帧，用 0/30/60/90 度回放检查方向和比例。
+阈值；该后备路径的最大灰度平台语义未定，建议同时保留角度帧，
+用 0/30/60/90 度回放检查方向和比例。
 
-### 关于手工帧锯齿（2026-08-09）
+### 关于手工帧锯齿
 
 contour 子帧插值（ManualContourInterpolation）解决的是**帧间时间台阶**（大块 texel 锁在同一角度区间），它保留关键帧
 空间轮廓，**不解决**低分辨率二值源帧的像素阶梯。当前运行时拒绝小于 1024 的输入；要消除
@@ -280,7 +253,7 @@ contour 子帧插值（ManualContourInterpolation）解决的是**帧间时间�
 
 - **空间锯齿**（源帧像素阶梯）：只能提供 1024 以上、带抗锯齿过渡带的手绘帧。
 - **帧间台阶**（C1 不连续导致的白线/阶梯）：靠 `ManualSDFBlurSigma` 对阈值场做空间高斯
-  平滑，实测默认 2 即可消除；调大更平滑但轮廓会外扩。`ManualContourInterpolation`
+  平滑，默认 2 即可消除；调大更平滑但轮廓会外扩。`ManualContourInterpolation`
   负责时间维度的子帧插值，两者互补。
 - **端点折线**（仅正面 0°/背面 180° 恰好打光时，边界呈一段段直线拼的折线；偏离 1° 即平滑）：
   光角在端点时可见边界恰好是"零距离等高线"，骑在手绘帧轮廓的原始像素锯齿上；偏离端点后
@@ -291,15 +264,15 @@ contour 子帧插值（ManualContourInterpolation）解决的是**帧间时间�
 ### BlendCompensation（表情 UV 补偿）
 
 眨眼/眯眼/闭单眼等表情会把皮肤连同 SDF 阈值图案一起拉动，本组按 blendshape 权重驱动
-5 分区 affine UV 偏移把图案"钉"回皮肤。v0.10 起默认开启。
+5 分区 affine UV 偏移把图案"钉"回皮肤。默认开启。
 
 | 键 | 默认 | 说明 |
 |---|---|---|
 | BlendCompensation | true | 主开关。开启后颊/眼分区始终参与补偿 |
 | BlendCompMouth | true | 嘴区 affine 也参与（默认开）。离线拟合显示嘴区 affine 修正有限，此开关保留作对比/回退 |
 | DefClBase | 0 | def_cl（闭眼）blendshape 的基线权重，先扣再累加。0=中性姿势全睁眼（与离线拟合一致）；若阈值图是按游戏"睁眼 1"姿势（def_cl=23）画的、中立面有静态偏移，填 23 归零 |
-| Gain | 0.6 | 补偿幅度乘子。0.6 为 2026-08-16 Gram 投影修正后的实测最优（1.0=完整离线拟合幅度、屏幕上略过冲）。图案与皮肤反向移动调低，仍拖拽则向 1 调高 |
-| LiveMode | true | 运行时实测补偿：每帧 BakeMesh 对照"无表情参照"（面部无表情时自动捕获，约 10 帧稳定；眼/嘴 def 插值通道豁免，默认闭嘴姿势也算无表情）。对任意头 mesh 与任意驱动源（blendshape、FBSAssist 颊动画、骨骼、第三方）都正确。参照建立前由离线表兜底（眨眼/单闭眼离线表已足够） |
+| Gain | 0.6 | 补偿幅度乘子。0.6 为标定值（1.0=完整离线拟合幅度、屏幕上略过冲）。图案与皮肤反向移动调低，仍拖拽则向 1 调高 |
+| LiveMode | true | 运行时补偿：每帧 BakeMesh 对照"无表情参照"（面部无表情时自动捕获，约 10 帧稳定；眼/嘴 def 插值通道豁免，默认闭嘴姿势也算无表情）。对任意头 mesh 与任意驱动源（blendshape、FBSAssist 颊动画、骨骼、第三方）都正确。参照建立前由离线表兜底（眨眼/单闭眼离线表已足够） |
 
 ### Advanced
 
@@ -343,8 +316,8 @@ contour 子帧插值（ManualContourInterpolation）解决的是**帧间时间�
 
 阈值图 shader 采样：R/G 是左右侧受光窗口边界，B/A 是对应通道有效标记；侧光角用
 `abs(yaw)/PI`（正面 0、背面 1）。过渡带宽 = `max(fwidth×1.5px 抗锯齿下限, _SoftnessAngle/180)`，
-软化在**角度域**恒定、不随镜头距离变化（v0.8 起；旧的屏幕像素域方案拉远时会把阈值场
-帧轮廓的 C1 折线显影成白线，已废弃）。`_ShadowColor.a` 明确定义为阴影强度。
+软化在**角度域**恒定、不随镜头距离变化；屏幕像素域方案在拉远时会把阈值场
+帧轮廓的 C1 折线显影成白线，故不采用。`_ShadowColor.a` 明确定义为阴影强度。
 
 ## 手绘阈值图
 
@@ -377,7 +350,7 @@ EC 全场景（捏脸/HEdit/HPlay/ADV）。换头、换角色、切场景后自�
 与 MaterialEditor 共存：本插件只追加材质、只改 `_RampG` 与 `_FaceShadowG` 两个全局面材质属性
 （均 local override 只作用面部实例）；
 叠加层材质的 `_ShadowColor` 等三项形态参数未被 ME 定制时实时跟随全局 02/04/05，
-定制后锁定为该卡自己的值（v0.10 起）。
+定制后锁定为该卡自己的值。
 插件运行时向 ME 注入 `Rainbowing/FaceSDFOverlay` 专属属性桶（`Enable` / `ShadowColor` /
 `ThresholdBias` / `SoftnessAngle`）供逐角色软开关与调色，未装 ME 时全局开关保底。
 
@@ -397,6 +370,6 @@ EC 全场景（捏脸/HEdit/HPlay/ADV）。换头、换角色、切场景后自�
 - [MetaHookSv HairShadow](https://github.com/hzqst/MetaHookSv/blob/main/memory/HairShadow.md) — 屏幕空间 stencil 遮挡位图方案（调研对比项，防 acne 的顶点偏移思路被记录）
 - [MooaToon：自定义头发阴影](https://mooatoon.com/docs/Tutorial/ControlTheShapeOfShadows) — 可控形状的额发阴影（资产面片路线，因发型不可泛化而未采用）
 
-**调研覆盖但未采用的路线**（判负理由见知识库 offset-shadow-hybrid-rt.md）
+**调研覆盖但未采用的路线**
 - [Unity Projector 组件](https://docs.unity3d.com/2022.3/Documentation/Manual/class-Projector.html) / [Dynamic Shadow Projector 资产](https://assetstore.unity.com/packages/tools/particles-effects/dynamic-shadow-projector-35558) — 投影器重投路线
 - [仿终末地渲染学习记录（知乎）](https://zhuanlan.zhihu.com/p/2054958065078871199) / [UE5 卡通渲染·刘海阴影（知乎）](https://zhuanlan.zhihu.com/p/1972323352069797451) — 静态阴影面片/贴花路线

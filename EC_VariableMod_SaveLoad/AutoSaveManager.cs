@@ -5,20 +5,9 @@ using UnityEngine;
 namespace EC_VariableMod_SaveLoad
 {
     /// <summary>
-    /// 自动存档状态机。
-    ///
-    /// 设计要点（解决快进时高频触发导致的写盘性能问题）：
-    /// 把「触发」与「写盘」解耦——
-    ///   - <see cref="OnCutLoaded"/> 由 LoadCut_Postfix 调用，每加载一个 CUT 触发一次，
-    ///     快进时会高频触发。此方法只做廉价记账（计数、检测 PART 切换、缓存上下文、置脏标记），
-    ///     绝不快照、绝不写盘。
-    ///   - <see cref="Tick"/> 由 HPlayScene.Update 每帧调用，做真实时间节流：
-    ///     距上次写盘不足 MinSaveIntervalSeconds 秒就跳过。快进时大量触发被合并为
-    ///     「每窗口至多写一次」；因为 Update 每帧都跑，快进结束后窗口一过即补写最终状态。
-    ///
-    /// 一致性：变量快照与记录的位置都在 Tick() 写盘那一刻一起获取；缓存的上下文始终是
-    /// 「最近加载的 CUT」，而 CUT 之间变量不变（脚本在 LoadCut 内执行，本插件 Postfix 在
-    /// VariableMod 之后），故写盘时的实时变量与缓存上下文自洽。
+    /// 自动存档状态机。触发与写盘解耦:<see cref="OnCutLoaded"/> 只做廉价记账(计数、切 PART、缓存上下文),
+    /// 绝不写盘,快进时高频触发不会打爆 IO;<see cref="Tick"/> 每帧做真实时间节流,把密集触发合并为
+    /// 每窗口至多写一次,快进结束后补写最终状态。变量快照与位置在写盘那一刻一起取,故自洽。
     /// </summary>
     internal sealed class AutoSaveManager
     {

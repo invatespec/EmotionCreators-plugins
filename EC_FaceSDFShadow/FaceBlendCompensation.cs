@@ -4,21 +4,9 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 表情驱动 SDF 采样 UV 补偿。
-    ///
-    /// 问题：blendshape 只动顶点位置不动 UV，眨眼/眯眼时 SDF 阈值图案跟着脸皮收缩扩张
-    /// （"画在脸上"感）。补偿：按 blendshape 权重线性驱动 5 区域 affine 位移场，
-    /// 在 shader 采样 _SDFTex 前把 UV 沿位移场正向偏移，把图案锚回中性姿势位置。
-    /// blendshape 线性性保证多通道叠加正确。
-    ///
-    /// 数据来源：research/blendshape_uv_fit.py 离线最小二乘拟合（cf_O_face 81 通道 ×
-    /// 5 区域，任一区域 p95 &gt; 0.3 texel 才入表，共 79 通道）。系数单位 texel/(权重=100)，
-    /// du = a*u+b*v+tx; dv = c*u+d*v+ty（u,v 为归一化 UV，系数以 512px 拟合基准记录）。
-    /// 零点姿势 = 睁眼中性脸（def_op 位移场全零 = bind pose）。
-    ///
-    /// 通道名在运行时 mesh 上解析（换头/mod 头通道序可能漂移，名字最稳）。
-    /// 权重由闭源 FBSAssist 的 FaceBlendShape.LateUpdate 每帧重写，onPreCull 在其后，
-    /// 读到的是当帧终值。
+    /// 表情驱动的 SDF 采样 UV 补偿:blendshape 只动顶点不动 UV,眨眼时阈值图案会跟着脸皮收缩。
+    /// 按权重线性驱动 5 区域 affine 位移场,在采样 _SDFTex 前正向偏移 UV 锚回中性姿势。
+    /// 系数是离线最小二乘拟合表,以通道名为键(换头后通道序会漂移,名字最稳)。
     /// </summary>
     internal static class FaceBlendCompensation
     {
@@ -646,11 +634,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// BakeMesh 验证：分离"blendshape 贡献"与"残余（骨骼/其它系统）贡献"。
-        /// 做法同帧两次烘焙：#1 当前姿势、#2 临时清零全部 blendshape（FBSAssist 下一帧
-        /// 会自动重写回来，同帧内还原权重，渲染不受影响）。#1−#2 = 纯 blendshape 位移；
-        /// 若屏幕位移 >> 该值，则脸颊上移来自骨骼动画等 blendshape 之外的驱动。
-        /// 顶点在两帧间 SMR transform 不变的前提下直接比较（BakeMesh 输出同空间）。
+        /// 同帧烘焙两次分离位移来源:#1 当前姿势、#2 清零全部 blendshape,#1−#2 即纯 blendshape 贡献。
+        /// 权重同帧内还原,FBSAssist 下一帧会重写,渲染不受影响。
         /// </summary>
         internal static void VerifyBake(SkinnedMeshRenderer smr)
         {

@@ -7,7 +7,7 @@ using System;
 namespace EC_BackVarSync
 {
     /// <summary>
-    /// 一次性位置跳转（读自动存档用）。照搬 EC_back 已实测的跳转链，但状态自持、不依赖 EC_back：
+    /// 一次性位置跳转(读自动存档用)。跳转链与 EC_back 一致,但状态自持、不依赖 EC_back:
     /// TryArm 置 isNextPart → HPlayScene.Update 调 GetNextUID（Postfix 改目标 uid）
     /// → InitPart → ADVPlay.SetPart（Prefix 改 cutIndex 并 NextCut）→ 目标 cut 同步加载完回调 onLanded。
     /// </summary>

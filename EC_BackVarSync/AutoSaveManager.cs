@@ -5,11 +5,8 @@ using UnityEngine;
 namespace EC_BackVarSync
 {
     /// <summary>
-    /// 自动存档状态机（沿用 EC_VariableMod_SaveLoad 已实测的触发/写盘解耦设计）。
-    ///
-    /// OnCutLoaded 由 LoadCut Postfix 调用，快进时高频触发——只做廉价记账，
-    /// 绝不快照、绝不写盘。Tick 由 HPlayScene.Update 每帧调用，做真实时间节流：
-    /// 距上次写盘不足 MinSaveIntervalSeconds 秒就合并本次触发，窗口一过补写最终状态。
+    /// 自动存档状态机,触发与写盘解耦。OnCutLoaded 由 LoadCut Postfix 调用,快进时高频触发,
+    /// 只做廉价记账不写盘;Tick 每帧做真实时间节流,窗口内合并触发,窗口一过补写最终状态。
     /// </summary>
     internal sealed class AutoSaveManager
     {

@@ -7,15 +7,9 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 逐角色的面部 SDF 阴影配置，存储到角色卡扩展数据。
-    /// Enable(bool) + ShadowColor(Color) + ThresholdBias/SoftnessAngle(float)。
-    ///
-    /// 软化在角度域：shader 过渡带 = max(fwidth×1.5px 抗锯齿, SoftnessAngle/180)，
-    /// 不随镜头距离变化。旧卡的 EdgeSoftnessPx 键（屏幕像素域）语义已失效，
-    /// 读取时直接忽略回退默认值，DataVersion 保持 1 —— 少一个键不影响旧版插件读新卡。
-    ///
-    /// 三个形态参数带 ME 定制锁存（Customized*）：被 ME/取色器改过的卡锁定
-    /// 该属性不受全局配置影响，标志随卡持久化。旧卡缺键 = false = 跟随全局。
+    /// 逐角色的面部 SDF 阴影配置,存到角色卡扩展数据:Enable + ShadowColor + 两个形态参数。
+    /// 软化在角度域,不随镜头距离变化。三个形态参数带 ME 定制锁存,标志随卡持久化;
+    /// 缺键即跟随全局。旧键 EdgeSoftnessPx 已失效,读取时忽略。
     /// </summary>
     public class FaceSDFShadowController : CharaCustomFunctionController
     {

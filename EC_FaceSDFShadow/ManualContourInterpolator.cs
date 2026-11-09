@@ -4,13 +4,9 @@ using System.Diagnostics;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 把一套硬边手绘帧(白=受光、黑=阴影)按相邻帧的带符号距离场(chamfer)插值成
-    /// 连续的受光窗口 [lo, hi]。
-    ///
-    /// 帧已按 sideAngle 升序传入(0=正面 → 1=背面)。每个像素找最长受光段:
-    /// - rising(暗→亮)边界 → lo,falling(亮→暗)边界 → hi,各自用相邻帧的距离场零交叉
-    ///   插值,得到连续的 sub-frame 角度。这样 9 帧硬边输入也能平滑扫掠,而不是
-    ///   所有边界像素锁在帧中点同时跳。
+    /// 把硬边手绘帧按相邻帧的带符号距离场插值成连续受光窗口 [lo,hi],消除帧间台阶。
+    /// 帧按 sideAngle 升序传入,暗→亮边界定 lo、亮→暗定 hi,各自用距离场零交叉求 sub-frame 角度;
+    /// 这样少量硬边帧也能平滑扫掠,不会所有边界像素锁在帧中点同时跳。
     /// </summary>
     internal static class ManualContourInterpolator
     {

@@ -3,12 +3,9 @@ using UnityEngine;
 
 namespace EC_HEditPosePanel
 {
-    // XYZ 轴骨骼变换单写(研究 14/25/26):
-    //   旋转 — 以 oc.localRotation 反解 quaternion,乘单轴增量写回 setter(走 ObjectCtrl.localRotation → changeAmount.rot → CalcTransform)
-    //   平移 — oc.localPosition 单分量增量 + 同步 guideObject.transform.localPosition(guide 球显示)
-    // 过滤: 平移 enablePos / 旋转 enableRot(对照原生 OnDragTransXZ-Y/OnDragRotX-Y-Z LINQ where)。
-    // sens 由调用方传(面板手动档 / ctrl/shift 临时覆盖);mode 由 Plugin 调用处分支,这里不接 mode。
-    // delta 统一用 Mouse Y(鼠标上=增加、下=减少),三轴同源无 X/Z Mouse X 噪声分支。
+    // XYZ 轴骨骼变换单写:旋转以 oc.localRotation 反解 quaternion 后乘单轴增量写回 setter(经
+    // changeAmount.rot → CalcTransform);平移改 localPosition 单分量并同步 guide 球。
+    // sens 由调用方传,mode 在 Plugin 调用处分支;delta 统一取 Mouse Y,三轴同源。
     internal static class Manipulator
     {
         // 兼容字段(SettingChanged 仍写,ApplyAxis 已不读 — 实际生效值由调用方 sens 参数传入)。保留作调试观察。
@@ -17,7 +14,7 @@ namespace EC_HEditPosePanel
 
         // 旋转:以 oc.localRotation(changeAmount.rot)为起点反解 quaternion,乘单轴增量写回 setter。
         // 单写不双写 transform — OCBone FK 路径由 CalcFKBone 用 changeAmount.rot 单点覆写 localEulerAngles,
-        // 双写 transform*= 与 changeAmount 反解互斥 → quaternion↔euler 轴序歧义漂移(视觉多轴抖动,研究 26)。
+        // 双写 transform*= 与 changeAmount 反解互斥 → quaternion↔euler 轴序歧义漂移(视觉多轴抖动)。
         // 同构 advguideon PoseSave.cs:957-983 RotChangeMethod(只动 changeAmount.rot,不动 guideObject.transform)。
         internal static void ApplyRotMany(string axis, ObjectCtrl[] ocs, float delta, float sens)
         {

@@ -15,10 +15,9 @@ using CharState = HEdit.ADVPart.CharState;
 
 namespace EC_Fix_PoseDedup
 {
-    // 动机：每个 CharState.Load 独立反序列化一份 PoseInfo+~107 OIBone，零跨 cut 共享，
-    // 大剧本下 95%+ 内容冗余（40992 份仅 1819 唯一），占 managed 堆约 48%。
-    // 加载期对相同内容的 PoseInfo 做 intern（共享同一实例），让重复副本及时成垃圾被 GC 回收，
-    // 压低 Boehm 分配峰值与基线。仅 playback 场景生效；HEdit 编辑会改 pose，一律跳过。
+    // 动机:每个 CharState.Load 独立反序列化一份 PoseInfo + 约 107 个 OIBone,跨 cut 零共享,
+    // 大剧本下绝大部分重复,占 managed 堆近半。加载期对相同内容做 intern 共享实例,
+    // 让副本及时被 GC 回收。仅 playback 生效,HEdit 会改 pose 一律跳过。
     [BepInProcess("EmotionCreators")]
     [BepInPlugin(GUID, PluginName, Version)]
     public sealed class PoseDedupPlugin : BaseUnityPlugin
@@ -37,7 +36,7 @@ namespace EC_Fix_PoseDedup
             Log = Logger;
             EnablePoseDedup = Config.Bind(
                 "General", "EnablePoseDedup", true,
-                "加载期对内容相同的 PoseInfo 做 intern 去重（仅 playback 场景）。已实测有效默认开启；置 false 可回滚。");
+                "加载期对内容相同的 PoseInfo 做 intern 去重(仅 playback 场景)。默认开启;置 false 可关闭。");
             GcInterval = Config.Bind(
                 "General", "GcInterval", 512,
                 new ConfigDescription(

@@ -22,7 +22,7 @@ namespace EC_HEditPosePanel
 
     internal static class HandPoseAdapter
     {
-        // EC 实测左右手镜像使用欧拉角映射；校准结果稳定后只允许通过格式版本变更此规则。
+        // EC 左右手镜像使用欧拉角映射;校准结果稳定后只允许通过格式版本变更此规则。
         private static Quaternion MirrorAnatomical(Quaternion rotation)
         {
             Vector3 euler = rotation.eulerAngles;

@@ -6,22 +6,9 @@ using UnityEngine.SceneManagement;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 阴影颜色反算工具窗（IMGUI，仅捏人界面）。
-    ///
-    /// 原理：overlay 是乘算层，阴影区最终色 = 基底色 P × lerp(白, C.rgb, C.a)。
-    /// 初值用 linear 域比值 m = linear(S)/linear(P) 分解（alpha = 1-min(m)、
-    /// C = (m-min(m))/(1-min(m))，恒在 [0,1]）。
-    ///
-    /// 实测发现管线存在非线性环节（后处理/tonemap）：一步解析解无法精确命中
-    /// （实测 V 反解的有效乘子在 G/B 通道给出不一致的强度）。故提供迭代校准：
-    /// 填入上轮结果后用 V 槽吸"实际呈现"，修正 m ← m × linear(S)/linear(V)，
-    /// 重新分解打日志，2~3 轮收敛；不依赖任何管线模型假设。
-    ///
-    /// 工作流：ME 把 Enable 拉 0 取 S → 拉回 1 取 P → 日志填 ME →
-    /// （校准轮）V 槽吸当前阴影处 → 校准 → 新日志再填 ME → 重复至满意。
-    /// 取色 5x5 均值抗噪。ReadPixels 必须在 WaitForEndOfFrame 协程里执行：
-    /// IMGUI 事件阶段调用会报 "not inside drawing frame" 且读回值不可靠。
-    /// IMGUI 契约见 docs/ec-knowledge/03-patterns/imgui-window-pattern.md。
+    /// 阴影颜色反算工具窗(IMGUI,仅捏人界面)。overlay 是乘算层,最终色 = P × lerp(白,C,C.a),
+    /// 初值按 linear 域比值分解再迭代校准:管线含后处理等非线性环节,一步解析解命不准。
+    /// ReadPixels 必须在 WaitForEndOfFrame 协程里执行。
     /// </summary>
     public class ShadowColorMixer : MonoBehaviour
     {
@@ -363,7 +350,7 @@ namespace EC_FaceSDFShadow
 
         /// <summary>linear 域通道比值。p 近黑返回 1（无信息）。
         /// 不钳上界：校准修正比 corr = S/V 合法地 >1（往浅修的方向），
-        /// Clamp01 会把全部修正钳死（实测每轮输出原样重复的根因）。</summary>
+        /// Clamp01 会把全部修正钳死,导致每轮输出原样重复。</summary>
         private static float RatioLinear(float s, float p)
         {
             float ls = Mathf.GammaToLinearSpace(Mathf.Clamp01(s));
@@ -490,7 +477,7 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 迭代校准：m ← m × linear(S)/linear(V)。把实测偏差乘回去，
+        /// 迭代校准:m ← m × linear(S)/linear(V),把测量偏差乘回去,
         /// 不依赖管线模型（后处理/tonemap 的非线性由逐轮逼近吸收）。
         /// 收敛（修正比≈1）时不再发新轮次，明确告知用户已完成。
         /// </summary>
@@ -510,7 +497,7 @@ namespace EC_FaceSDFShadow
             var corr = RatioLinearRgb(_slotS, _slotV);
             _vConsumed = true;
             // 诊断：参与运算的内部值全落日志（含 round 与修正比）。
-            // 实测出现过"V-S 差 20+ 仍判收敛"的状态错乱，靠这行定位哪一步的值不对
+            // 曾出现"V-S 差 20+ 仍判收敛"的状态错乱,靠这行定位哪一步的值不对
             FaceSDFShadowPlugin.Log.LogInfo(string.Format(
                 "[ColorMixer] calibrate round={0} S=({1},{2},{3}) V=({4},{5},{6}) corr=({7:0.000},{8:0.000},{9:0.000})",
                 _solveRound,
@@ -537,7 +524,7 @@ namespace EC_FaceSDFShadow
             SolveFromMult(m);
         }
 
-        /// <summary>S/P 任一更新后的初值重算：清掉陈旧 V 与轮次，避免旧实测混进新目标。
+        /// <summary>S/P 任一更新后的初值重算:清掉陈旧 V 与轮次,避免旧测量值混进新目标。
         /// 初值乘子钳 [0,1]；S 某通道比 P 亮（高光/反光）时该通道无阴影差。</summary>
         private void LogResult()
         {

@@ -7,12 +7,8 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 面部阈值图的取图入口与缓存。
-    ///
-    /// 来源只有手绘素材：<see cref="FaceManualSDFBaker"/> 的角度帧，其次同目录的 SDF.png。
-    /// 拿不到就返回 null，叠加层不生效。
-    ///
-    /// 另对外提供 UV coverage 光栅化与膨胀，供 manual 路径复用。
+    /// 面部阈值图的取图入口与缓存。来源只有手绘素材:<see cref="FaceManualSDFBaker"/> 的角度帧,
+    /// 其次同目录 SDF.png;拿不到返回 null,叠加层不生效。另提供 UV coverage 光栅化与膨胀。
     /// </summary>
     internal static class FaceStructuredSDFBaker
     {

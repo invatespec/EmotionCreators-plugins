@@ -189,19 +189,6 @@ cameraADVCanvas.rect = new Rect(finalX, finalY, scale, scale);
 - **BepInEx**：5.x
 - **Unity**：2017.4.24
 
-## 版本历史
-
-### v2.0.0 (2026-06-22)
-- 新增：自动调整 Chara State 面板位置（监测 Button Chara Toggle）
-- 新增：缩小 List 面板及按钮宽度
-- 新增：视口位置偏移配置（OffsetX / OffsetY）
-- 优化：使用 Harmony 补丁自动初始化 UI 调整
-
-### v1.0.0 (2026-06-22)
-- 初始版本
-- 支持快捷键切换视口缩放
-- 支持自定义缩放比例
-
 ## 许可
 
 此插件为开源项目，遵循项目许可协议。

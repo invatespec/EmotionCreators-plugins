@@ -4,14 +4,8 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// DEBUG 快捷键（Ctrl+F10）：枚举角色面部 mesh 的全部 BlendShape 通道
-    /// （索引 / 名字 / 当前权重）打印到日志。
-    ///
-    /// 用途：表情（眨眼/眯眼/嘟嘴等）通道识别——做表情或播放 ADV 时按下，
-    /// 看哪些通道权重非零即可定位表情对应通道；供 UV 补偿方案挑选要抵消的变形通道。
-    /// 名字表源码与资产里都没有（FBSAssist 闭源、mesh 名字块被压缩），
-    /// 只能运行时枚举（社区插件 EC_ADVPlayLoadBlendShape 同法）。
-    /// 权重是上一帧 FaceBlendShape.LateUpdate 写入的值（Update 时机读取），足够定位。
+    /// DEBUG 快捷键(Ctrl+F10):枚举面部 mesh 全部 BlendShape 通道(索引/名字/权重)打印到日志。
+    /// 通道名在源码与资产里都查不到(FBSAssist 闭源、mesh 名字块被压缩),只能运行时枚举。
     /// </summary>
     internal static class FaceBlendShapeDump
     {

@@ -12,13 +12,10 @@ using UnityEngine;
 namespace EC_BackVarSync
 {
     /// <summary>
-    /// HPlay 前进控制器：自定义按键前进 + 自动前进。
-    ///
-    /// 前进必须走原生 ADVPlay.OnClick：VariableMod 的 event-next/goto-cut 等挂在它的 Prefix 上，
-    /// 直接调 NextCut 会让这些脚本静默不执行。OnClick 解析不到时才退回复刻分支。
-    ///
-    /// 守卫自构而不调 Check()：Check() 含「文本隐藏点击」(TextHideClick)条件，游戏默认关闭，
-    /// 原生点击会因文本未隐藏而无限期卡住；本控制器只在出现选项分支(isSelect)时停下。
+    /// HPlay 前进控制器:自定义按键前进 + 自动前进。
+    /// 必须走原生 ADVPlay.OnClick,VariableMod 的 event-next/goto-cut 挂在它的 Prefix 上,
+    /// 直接调 NextCut 会让脚本静默不执行。守卫自构而不调 Check():后者含 TextHideClick 条件,
+    /// 游戏默认关闭会导致无限期卡住;本控制器只在出现选项分支时停下。
     /// </summary>
     internal sealed class HPlayAdvanceManager
     {

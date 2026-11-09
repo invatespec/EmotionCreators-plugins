@@ -7,15 +7,9 @@ using UnityEngine;
 namespace EC_FaceSDFShadow
 {
     /// <summary>
-    /// 从用户绘制的手绘帧生成半浮点「受光窗口」阈值图。
-    ///
-    /// 帧语义:白色 = 受光,黑色 = 阴影。帧文件名纯数字,帧序
-    /// 0=背面(sideAngle 1.0) → max=正面(sideAngle 0.0)。运行时 sideAngle ∈ [0,1],0=正面、1=背面。
-    /// 每个像素被提取成一个受光窗口 [lo, hi]:sideAngle 落在窗口内 = 受光(无阴影),
-    /// 窗口外 = 阴影。这样能表达「下颚带侧光亮、正面/背面都暗」的暗→亮→暗时序。
-    ///
-    /// 通道:R=右光 hi、G=左光 hi、B=右光 lo、A=左光 lo。左右严格镜像对称,因此只画
-    /// left 一套,右光由 UV 水平镜像得到。
+    /// 从手绘帧生成半浮点「受光窗口」阈值图。帧文件名纯数字,0=背面、max=正面;
+    /// 每像素提取窗口 [lo,hi],sideAngle 落在窗口内即受光,可表达「下颚带侧光亮、正背面都暗」。
+    /// 通道 R/G 为左右光 hi,B/A 为左右光 lo;左右镜像对称,只画左光一套。
     /// </summary>
     internal static class FaceManualSDFBaker
     {
@@ -146,10 +140,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// 端点外扩:把 lo==0 扩到负哨兵、hi==1 扩到 >1 哨兵。
-        /// 否则 shader 的 smoothstep(lo-edge, lo+edge, sideAngle) 在 sideAngle=0 时
-        /// 恰好落在 lo=0 像素的中点(0.5),整脸被压暗一半;背面同理。
-        /// blur 之后做,只动端点值,不碰边界像素的真实角度。
+        /// 端点外扩:lo==0 扩到负哨兵、hi==1 扩到大于 1 的哨兵。否则 smoothstep 在
+        /// sideAngle=0 时正好落在 lo=0 像素中点 0.5 处,整脸被压暗一半。blur 之后做,不碰真实角度。
         /// </summary>
         private static void ExtendEndpoints(float[] lo, float[] hi, bool[] covered)
         {
@@ -620,9 +612,8 @@ namespace EC_FaceSDFShadow
         }
 
         /// <summary>
-        /// Coverage-aware separable Gaussian blur on a threshold field.
-        /// Only blurs over covered texels, re-normalizing the kernel to avoid
-        /// pulling in values from uncovered (zero) areas.
+        /// 带覆盖感知的可分离高斯模糊:只对有效 texel 卷积,并重归一化核权重,
+        /// 避免把未覆盖区的零值吸进边界。
         /// </summary>
         private static float[] BlurThresholdField(float[] source, bool[] covered,
             int size, float sigma)

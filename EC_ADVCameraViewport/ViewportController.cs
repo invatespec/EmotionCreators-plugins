@@ -7,12 +7,9 @@ using UnityEngine.UI;
 namespace EC_ADVCameraViewport
 {
     /// <summary>
-    /// 视口控制器 - 负责监听快捷键并调整摄像机视口及 ADV Canvas 相机
-    ///
-    /// 渲染管线说明（EC 多相机架构）：
-    /// - cam.thisCmaera: 主 3D 场景相机，修改其 rect 缩放 3D 渲染区域
-    /// - cameraADVCanvas: ADV Canvas 专用相机，需同步 rect 使 UI 跟随视口
-    /// - 游戏已通过 ADV.SetCanvasCamera(cameraADVCanvas) 绑定，本插件只同步 rect
+    /// 视口控制器:监听快捷键并调整摄像机视口与 ADV Canvas 相机。
+    /// cam.thisCmaera 是主 3D 相机,改 rect 缩放渲染区域;cameraADVCanvas 需同步 rect
+    /// 使 UI 跟随视口(游戏已通过 ADV.SetCanvasCamera 绑定,本插件只同步 rect)。
     /// </summary>
     internal class ViewportController : MonoBehaviour
     {

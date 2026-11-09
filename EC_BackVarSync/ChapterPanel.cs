@@ -7,10 +7,9 @@ using UnityEngine;
 namespace EC_BackVarSync
 {
     /// <summary>
-    /// 剧本/章节两级存档管理面板（自绘 IMGUI，参考 EC_LogFilter：固定尺寸深色扁平）。
-    /// 一级页：剧本格子（+剧本自动建号并聚焦改名；格角 × 删除，点确认区外撤回）。
-    /// 二级页：章节/存档树（+章节/+存档自动建号并聚焦改名；章节与存档均可改名、删除均二步确认）。
-    /// 显隐：联动 EC_back 展开/收起，F9 任何状态可开关；位置默认 EC_back 下方，可拖走，F1 可重置。
+    /// 剧本/章节两级存档管理面板(自绘 IMGUI)。一级页为剧本格子,二级页为章节与存档树,
+    /// 均支持新建自动建号并聚焦改名、二步确认删除。显隐联动 EC_back,F9 任意状态可开关,
+    /// 位置默认在 EC_back 下方可拖动,F1 重置。
     /// </summary>
     internal sealed class ChapterPanel
     {

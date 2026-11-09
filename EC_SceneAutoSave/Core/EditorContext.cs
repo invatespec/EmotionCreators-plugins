@@ -91,7 +91,7 @@ namespace EC_SceneAutoSave.Core
             return cachedCanvas;
         }
 
-        // 节点总览判定见 docs/ec-knowledge/03-patterns/hedit-overview-imgui.md，不能用 SelectPart == null。
+        // 节点总览用 LoadSceneName 判断,不能用 SelectPart == null。
         public static bool IsNodeOverviewActive()
         {
             if (!IsHEditTopScene())
