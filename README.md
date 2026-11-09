@@ -54,7 +54,7 @@ Focused on HEdit authoring QoL, ADV playback tooling, lighting, and memory fixes
 
 | Plugin | Version | Description |
 |--------|---------|-------------|
-| **[EC_LogFilter](EC_LogFilter/)** | 1.0.0 | Per-session log counts and source/level filtering in an IMGUI window (Ctrl+Alt+L). Rules are saved under UserData/PluginData/EC_LogFilter. |
+| **[EC_LogFilter](EC_LogFilter/)** | 1.0.1 | Per-session log counts and source/level filtering in an IMGUI window (Ctrl+Alt+L). Rules are saved under UserData/PluginData/EC_LogFilter. |
 
 ### Memory / Performance Fixes
 

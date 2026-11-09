@@ -2,7 +2,7 @@
 
 在游戏内查看各日志来源的数量，按来源独立屏蔽 Debug、Info、Message、Warning、Error、Fatal。
 
-版本：1.0.0。适用于 Emotion Creators / BepInEx 5。
+版本：1.0.1。适用于 Emotion Creators / BepInEx 5。
 
 ## 使用
 

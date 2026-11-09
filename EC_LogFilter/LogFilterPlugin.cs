@@ -14,7 +14,7 @@ namespace EC_LogFilter
     {
         public const string PluginGuid = "com.ec.logfilter";
         public const string PluginName = "EC_LogFilter";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.0.1";
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private ConfigEntry<KeyboardShortcut> _shortcut;
         private ConfigEntry<float> _positionX;
@@ -84,7 +84,9 @@ namespace EC_LogFilter
         private void OnGUI() { _window?.Draw(); }
         private void OnDisable() { _window?.SetVisible(false); }
         private void OnApplicationFocus(bool focused) { if (!focused) _window?.ReleaseInput(); }
-        private void OnApplicationQuit() { Shutdown(); }
+        // 游戏退出前会加载 Exit 确认场景并 CancelQuit，此时 Unity 已广播过本回调；
+        // 因此这里只能补存规则，不能清理，否则取消退出后插件永久停摆。
+        private void OnApplicationQuit() { SavePendingRules(); }
         private void OnDestroy() { Shutdown(); }
 
         private bool ShortcutPressed()
@@ -146,12 +148,18 @@ namespace EC_LogFilter
             _reportedError = error;
         }
 
+        // 退出回调与销毁回调都可能先到，保存必须幂等：TrySave 成功后清 pending。
+        private void SavePendingRules()
+        {
+            if (_store == null || _statistics == null || !_store.CanSave || !_store.HasPendingChanges) return;
+            _store.TrySave(_statistics.ExportRules());
+        }
+
         private void Shutdown()
         {
             if (_shutdown) return;
             _shutdown = true;
-            if (_store != null && _statistics != null && _store.CanSave && _store.HasPendingChanges)
-                _store.TrySave(_statistics.ExportRules());
+            SavePendingRules();
             _interceptor?.Dispose();
             _inputGuard?.Dispose();
             _window?.Dispose();
